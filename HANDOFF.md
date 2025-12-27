@@ -1,7 +1,7 @@
 # SayIntentionsML - Project Handoff
 
-**Date**: December 23, 2024  
-**Status**: 🎉 **MAJOR BREAKTHROUGH - Native Client Confirmed Feasible**
+**Date**: December 27, 2024  
+**Status**: ✅ **PHASE 1 COMPLETE - MVP Text Client Working**
 
 ---
 
@@ -48,6 +48,53 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 # - 65KB MP3 file
 # - 44.1kHz, mono, playable
 ```
+
+### ✅ Audio Module (Complete - Dec 27, 2024)
+- **Location**: `client/src/audio/`
+- **Status**: Working, tested with real SayIntentions audio URLs
+- **Components**:
+  - `downloader.py` - Downloads audio from S3 URLs with local caching + ThreadPoolExecutor
+  - `player.py` - Cross-platform player using external subprocess (mpv/afplay)
+  - `handler.py` - High-level interface combining download + playback
+- **Platform Support**:
+  - **Linux**: Uses `mpv` (preferred) or `ffplay`
+  - **macOS**: Uses `afplay` (built-in)
+- **Features**:
+  - Non-blocking audio (no Python GIL issues!)
+  - Local cache in `~/.cache/SayIntentionsAI/audio/`
+  - Callbacks for playback start/complete events
+  - Volume control, skip, queue management
+- **Test**: `python client/src/tests/test_audio.py`
+
+### ✅ CLI Test Harness (Complete - Dec 27, 2024)
+- **Location**: `client/src/cli.py`
+- **Status**: Working, full end-to-end tested
+- **Features**:
+  - Interactive mode with command prompt
+  - One-shot commands for scripts (`--status`, `--history`, `--play`, `--say`)
+  - Automatic config.ini discovery
+  - Background polling for new comms
+  - Audio playback controls (volume, pause, skip)
+  - Weather queries
+- **Run**: `.venv/bin/python client/src/cli.py -c` (auto-connect)
+
+### 🔧 GUI Client (In Progress - Dec 27, 2024)
+- **Location**: `client/src/ui/`
+- **Status**: Core UI built, needs polish
+- **Components**:
+  - `main_window.py` - Main application window with menu bar
+  - `comms_widget.py` - Communication history with per-message audio playback
+  - `frequency_panel.py` - COM1/COM2/transponder display
+  - `transmission_panel.py` - Text input with quick phrases and PTT button
+  - `status_panel.py` - Connection status, volume control, polling indicator
+  - `styles.py` - Modern dark theme with accent colors
+- **Features**:
+  - Dark theme with modern glassmorphism-inspired design
+  - Auto-polling for new communications (2 second interval)
+  - Audio playback with volume control
+  - Quick phrase buttons for common responses
+  - Frequency swap/tune controls
+- **Run**: `.venv/bin/python client/src/main.py`
 
 ---
 
@@ -118,9 +165,21 @@ SayIntentionsML/
 │           └── lin_x64/
 │               └── SayIntentionsAIml.xpl  # Built plugin ✅
 │
-├── client/                            # Python client (TODO)
+├── client/                            # Python client
 │   ├── requirements.txt
 │   └── src/
+│       ├── audio/                     # Audio module ✅
+│       │   ├── downloader.py          # URL download + caching
+│       │   ├── player.py              # Audio playback (sounddevice)
+│       │   └── handler.py             # High-level audio handler
+│       ├── core/
+│       │   └── sapi_interface.py      # SAPI REST client
+│       ├── simapi/
+│       │   └── file_watcher.py        # SimAPI JSON watcher
+│       ├── ui/
+│       │   └── main_window.py         # PySide6 GUI (stub)
+│       └── tests/
+│           └── test_audio.py          # Audio module tests ✅
 │
 ├── docs/
 │   ├── SAPI_FINDINGS.md               # API research ✅
@@ -211,24 +270,26 @@ SayIntentionsML/
 ### Phase 1: MVP (Text-Only Client)
 **Goal**: Working client with text input and audio output
 
-| Task | Priority | Effort |
+| Task | Priority | Status |
 |------|----------|--------|
-| SAPI Python module | P0 | 2-3 hours |
-| Audio playback (download + play MP3) | P0 | 1-2 hours |
-| Basic CLI interface | P0 | 1-2 hours |
-| Poll loop for comms history | P0 | 1 hour |
-| **Total Phase 1** | | **~8 hours** |
+| SAPI Python module | P0 | ✅ **COMPLETE** |
+| Audio playback (download + play MP3) | P0 | ✅ **COMPLETE** |
+| Basic CLI interface | P0 | ✅ **COMPLETE** |
+| Poll loop for comms history | P0 | ✅ **COMPLETE** |
+| **Phase 1** | | **✅ COMPLETE** |
 
 ### Phase 2: GUI Client
 **Goal**: Full-featured GUI application
 
-| Task | Priority | Effort |
+| Task | Priority | Status |
 |------|----------|--------|
-| PySide6 main window | P1 | 4-6 hours |
-| Comms history display | P1 | 2-3 hours |
-| Frequency panel | P1 | 2-3 hours |
-| System tray integration | P2 | 2 hours |
-| **Total Phase 2** | | **~12 hours** |
+| PySide6 main window | P1 | ✅ **COMPLETE** |
+| Comms history display | P1 | ✅ **COMPLETE** |
+| Frequency panel | P1 | ✅ **COMPLETE** |
+| Transmission panel | P1 | ✅ **COMPLETE** |
+| Status/volume panel | P1 | ✅ **COMPLETE** |
+| System tray integration | P2 | ⏳ Pending |
+| **Phase 2** | | **🔧 90% COMPLETE** |
 
 ### Phase 3: Voice Input
 **Goal**: Push-to-talk with local speech recognition

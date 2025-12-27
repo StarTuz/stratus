@@ -49,3 +49,4 @@ adapters/xplane/build/
 
 # Test artifacts
 *.mp3
+config.ini

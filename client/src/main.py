@@ -1,48 +1,61 @@
+#!/usr/bin/env python3
+"""
+SayIntentionsML - Native Mac/Linux Client
+
+Main entry point for the application.
+
+Usage:
+    python main.py           # Launch GUI
+    python main.py --cli     # Launch CLI mode
+    python main.py --help    # Show help
+"""
+
 import sys
 import os
+import argparse
 import logging
-from PySide6.QtWidgets import QApplication
 
-# Add 'src' to path so imports work
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
+# Add src to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.sapi_interface import MockSapiService
-from simapi.file_watcher import SimApiWatcher
-from ui.main_window import MainWindow
-
-class AppContext:
-    def __init__(self):
-        self.sapi = MockSapiService()
-        # Default to a local data dir in user's home
-        data_dir = os.path.expanduser("~/.local/share/SayIntentionsAI")
-        self.sim_watcher = SimApiWatcher(data_dir)
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(
+        description='SayIntentionsML - Native Mac/Linux Client',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modes:
+    Default (no args)    Launch the GUI application
+    --cli                Launch interactive command-line interface
     
-    app = QApplication(sys.argv)
+For CLI-only usage, see: python cli.py --help
+"""
+    )
     
-    ctx = AppContext()
-    window = MainWindow(ctx)
+    parser.add_argument('--cli', action='store_true',
+                        help='Launch in CLI mode instead of GUI')
+    parser.add_argument('--debug', '-d', action='store_true',
+                        help='Enable debug logging')
     
-    # Wire up SimWatcher updates to UI
-    # Note: In a real app we need to be careful about threading here (Qt Signals)
-    # For this prototype we'll verify it works in console first or assume the watcher callback 
-    # might need a thread-safe wrapper, but let's just print to stdout for now to avoid complexity in step 1.
-    def on_sim_update(data):
-        print(f"Sim Update: {data}")
-        # window.update_sim_data(data) # Unsafe from background thread
+    args = parser.parse_args()
     
-    ctx.sim_watcher.on_data_update = on_sim_update
-    ctx.sim_watcher.start()
+    # Configure logging
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     
-    window.show()
-    
-    exit_code = app.exec()
-    
-    ctx.sim_watcher.stop()
-    sys.exit(exit_code)
+    if args.cli:
+        # Launch CLI
+        from cli import SayIntentionsCLI
+        cli = SayIntentionsCLI()
+        cli.cmdloop()
+    else:
+        # Launch GUI
+        from ui import run_gui
+        run_gui()
+
 
 if __name__ == "__main__":
     main()

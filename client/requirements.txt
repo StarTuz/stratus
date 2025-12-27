@@ -1,5 +1,9 @@
 PySide6
-sounddevice
-numpy
 requests
-pyaudio
+
+# Audio playback uses external player, no Python audio libraries needed:
+# - Linux: mpv (pacman -S mpv / apt install mpv)
+# - macOS: afplay (built-in)
+
+# Optional: for downloading files
+# Note: requests is already included above
