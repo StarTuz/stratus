@@ -11,22 +11,29 @@ A Python plugin for X-Plane 11/12 that provides bidirectional communication with
 ## Installation
 
 ### Requirements
-- X-Plane 11 or 12
-- XPPython3 plugin installed
+- X-Plane 11 or 12 (Linux, Mac, Windows)
+- **XPPython3** (Required for the plugin to load)
+  - Download: [https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html](https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html)
+  - Follow instructions to install `XPPython3` into `Resources/plugins/`
 
-### Steps
+### Automatic Installation
+The SayIntentionsML client attempts to automatically install the adapter plugin to:
+`X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML`
 
-1. Install XPPython3 from [https://xppython3.readthedocs.io/](https://xppython3.readthedocs.io/)
+If automatic installation fails, follow the manual steps below.
 
-2. Copy the plugin to your X-Plane plugins folder:
+### Manual Installation
+1. Ensure XPPython3 is installed (see Requirements above).
+2. Copy the plugin folder:
    ```bash
-   mkdir -p ~/X-Plane\ 12/Resources/plugins/PythonPlugins/SayIntentionsML
-   cp PI_SayIntentions.py ~/X-Plane\ 12/Resources/plugins/PythonPlugins/SayIntentionsML/
+   # Create the PythonPlugins directory if it doesn't exist (created by XPPython3 usually)
+   mkdir -p "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML"
+   
+   # Copy files
+   cp PI_SayIntentions.py "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/"
+   cp overlay.py "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/"
    ```
-
-3. Restart X-Plane
-
-4. Check the X-Plane log for: `[SayIntentionsML] Plugin started`
+3. Restart X-Plane.
 
 ## Data Exchange
 

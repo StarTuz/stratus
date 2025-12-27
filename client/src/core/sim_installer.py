@@ -29,45 +29,88 @@ PLUGIN_FILES = {
     "overlay.py": "adapters/xplane/overlay.py"
 }
 
+XPPYTHON3_URL = "https://xppython3.readthedocs.io/en/latest/_downloads/xp3-linux.zip"
+
 def find_xplane_path() -> Optional[Path]:
     """Search for X-Plane installation directory."""
+    
+    # 1. Check strict registry file (best method)
+    install_file = Path.home() / ".x-plane" / "x-plane_install_12.txt"
+    if install_file.exists():
+        try:
+            lines = install_file.read_text().splitlines()
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                    
+                path = Path(line)
+                if path.exists():
+                    logger.info(f"Found X-Plane 12 via registry: {path}")
+                    return path
+                    
+        except Exception as e:
+            logger.warning(f"Failed to read X-Plane registry: {e}")
+
+    # 2. Check standard paths
     for path in XPLANE_PATHS:
         if path.exists() and (path / "Resources" / "plugins").exists():
             return path
+            
     return None
+
+def install_xppython3(plugins_dir: Path) -> bool:
+    """Download and install XPPython3 if missing."""
+    import zipfile
+    import tempfile
+    import subprocess
+    
+    xppython_dir = plugins_dir / "XPPython3"
+    if xppython_dir.exists():
+        return True # Already installed
+        
+    logger.info("XPPython3 missing. Downloading via curl...")
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        
+        # Use curl to download (bypasses some bot protection)
+        cmd = ["curl", "-L", "-o", str(tmp_path), XPPYTHON3_URL]
+        subprocess.check_call(cmd)
+            
+        logger.info("Installing XPPython3...")
+        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            zip_ref.extractall(plugins_dir)
+            
+        tmp_path.unlink() # Cleanup
+        return True
+    except Exception as e:
+        logger.error(f"Failed to install XPPython3: {e}")
+        return False
 
 def install_plugin(xplane_path: Path) -> bool:
     """
     Install the plugin to the given X-Plane directory.
-    
-    Args:
-        xplane_path: Path to X-Plane root folder
-    
-    Returns:
-        True if successful, False otherwise.
     """
     try:
-        # Determine paths
         plugins_dir = xplane_path / "Resources" / "plugins"
         python_plugins_dir = plugins_dir / "PythonPlugins"
         target_dir = python_plugins_dir / "SayIntentionsML"
         
-        # 1. Ensure PythonPlugins exists (requires XPPython3)
+        # 1. Ensure XPPython3 is installed
+        if not install_xppython3(plugins_dir):
+            logger.warning("Could not install XPPython3. Plugin may not load.")
+        
+        # 2. Ensure PythonPlugins exists (XPPython3 creates it on run, but we can make it now)
         if not python_plugins_dir.exists():
-            # We can't install XPPython3 automatically easily, but we can try creating the folder
-            # Usually users installing Python plugins already have it.
-            # If not, the plugin just won't load, which is harmless.
             python_plugins_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Created PythonPlugins directory")
             
-        # 2. Create target directory
+        # 3. Create target directory
         target_dir.mkdir(parents=True, exist_ok=True)
         
-        # 3. Locate source files
+        # 4. Locate source files
         # client/src/core/sim_installer.py -> ... -> SayIntentionsML
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        
-        installed_files = []
         
         for filename, rel_path in PLUGIN_FILES.items():
             src_file = repo_root / rel_path
@@ -75,7 +118,6 @@ def install_plugin(xplane_path: Path) -> bool:
             
             if src_file.exists():
                 shutil.copy2(src_file, dst_file)
-                installed_files.append(filename)
                 logger.debug(f"Installed {filename} to {dst_file}")
             else:
                 logger.error(f"Source file not found: {src_file}")

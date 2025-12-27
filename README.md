@@ -24,38 +24,43 @@ SayIntentions.AI provides realistic AI-powered Air Traffic Control for flight si
 SayIntentionsML/
 ├── client/                 # Native Python client (GUI + Audio)
 │   └── src/
-│       ├── core/          # SAPI interface (cloud communication)
-│       ├── ui/            # PySide6 GUI
+│       ├── core/          # Business logic & SAPI interface
+│       ├── ui/            # PySide6 GUI (Qt)
 │       ├── audio/         # Audio capture/playback
-│       └── simapi/        # SimAPI file watcher
 │
 ├── adapters/
-│   └── xplane/            # X-Plane Native Plugin (C)
-│       ├── SayIntentionsAIml/
-│       │   ├── lin_x64/   # ✅ Linux plugin (built)
-│       │   ├── mac_x64/   # 🔜 macOS plugin
-│       │   └── win_x64/   # Optional Windows plugin
-│       ├── src/           # Plugin source code
-│       └── sdk/           # X-Plane SDK (downloaded)
+│   └── xplane/            # X-Plane Plugin (Python)
+│       ├── PI_SayIntentions.py  # Main plugin file
+│       └── overlay.py           # In-sim overlay widget
 │
 └── docs/                   # Documentation
 ```
 
 ## Quick Start
 
-### 1. Build the X-Plane Plugin (Linux)
+### 1. Prerequisites (X-Plane Users)
+
+You must install **XPPython3** for the adapter plugin to work.
+- Download: [https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html](https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html)
+- Extract the `zip` file into your `X-Plane/Resources/plugins/` folder.
+
+### 2. Setup the Client
 
 ```bash
-cd adapters/xplane
-./setup_sdk.sh           # Download X-Plane SDK
-mkdir build && cd build
-cmake .. && make
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r client/requirements.txt
 ```
 
-### 2. Install the Plugin
+### 3. Run
 
 ```bash
-cp -r SayIntentionsAIml ~/X-Plane\ 12/Resources/plugins/
+# Launch the client
+# (Automatically installs the X-Plane plugin on first run!)
+python client/src/main.py
 ```
 
 ### 3. Run the Client (Mock Mode)
