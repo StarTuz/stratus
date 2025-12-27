@@ -18,6 +18,7 @@ class FrequencyDisplay(QFrame):
     """A single frequency display (COM1 or COM2)."""
     
     frequency_changed = Signal(str, str)  # channel, new_freq
+    swap_clicked = Signal(str)  # channel
     
     def __init__(self, channel: str, parent=None):
         super().__init__(parent)
@@ -106,24 +107,21 @@ class FrequencyDisplay(QFrame):
         self.standby_input.setText(freq)
     
     def _swap_frequencies(self):
-        """Swap active and standby frequencies."""
-        new_standby = self._active_freq
-        new_active = self.standby_input.text()
-        
-        self.set_active_frequency(new_active)
-        self.set_standby_frequency(new_standby)
-        
-        self.frequency_changed.emit(self.channel, new_active)
+        """Emit signal to swap active and standby frequencies."""
+        self.swap_clicked.emit(self.channel)
     
     def _on_standby_entered(self):
         """Handle standby frequency input."""
-        self._standby_freq = self.standby_input.text()
+        new_standby = self.standby_input.text()
+        self._standby_freq = new_standby
+        self.frequency_changed.emit(self.channel, new_standby)
 
 
 class FrequencyPanel(QWidget):
     """Panel showing COM1 and COM2 frequencies."""
     
     tune_frequency = Signal(str, str)  # channel, frequency
+    swap_frequency = Signal(str)  # channel (COM1/COM2)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -145,10 +143,12 @@ class FrequencyPanel(QWidget):
         
         self.com1 = FrequencyDisplay("COM1")
         self.com1.frequency_changed.connect(self._on_freq_changed)
+        self.com1.swap_clicked.connect(self._on_swap_clicked)
         radios_layout.addWidget(self.com1)
         
         self.com2 = FrequencyDisplay("COM2")
         self.com2.frequency_changed.connect(self._on_freq_changed)
+        self.com2.swap_clicked.connect(self._on_swap_clicked)
         radios_layout.addWidget(self.com2)
         
         layout.addLayout(radios_layout)
@@ -188,16 +188,24 @@ class FrequencyPanel(QWidget):
         layout.addWidget(xpdr_frame)
     
     def _on_freq_changed(self, channel: str, freq: str):
-        """Handle frequency change."""
+        """Handle standby frequency change (user typed in standby field)."""
         self.tune_frequency.emit(channel, freq)
     
-    def update_com1(self, freq: str):
-        """Update COM1 frequency."""
-        self.com1.set_active_frequency(freq)
+    def _on_swap_clicked(self, channel: str):
+        """Handle swap button click."""
+        self.swap_frequency.emit(channel)
     
-    def update_com2(self, freq: str):
-        """Update COM2 frequency."""
-        self.com2.set_active_frequency(freq)
+    def update_com1(self, active: str, standby: str = None):
+        """Update COM1 frequencies."""
+        self.com1.set_active_frequency(active)
+        if standby:
+            self.com1.set_standby_frequency(standby)
+    
+    def update_com2(self, active: str, standby: str = None):
+        """Update COM2 frequencies."""
+        self.com2.set_active_frequency(active)
+        if standby:
+            self.com2.set_standby_frequency(standby)
     
     def update_transponder(self, code: str, mode: str = "ALT"):
         """Update transponder display."""

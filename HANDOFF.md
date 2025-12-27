@@ -78,23 +78,45 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
   - Weather queries
 - **Run**: `.venv/bin/python client/src/cli.py -c` (auto-connect)
 
-### 🔧 GUI Client (In Progress - Dec 27, 2024)
+### ✅ GUI Client (Complete - Dec 27, 2024)
 - **Location**: `client/src/ui/`
-- **Status**: Core UI built, needs polish
+- **Status**: Fully functional with X-Plane integration
 - **Components**:
   - `main_window.py` - Main application window with menu bar
   - `comms_widget.py` - Communication history with per-message audio playback
-  - `frequency_panel.py` - COM1/COM2/transponder display
+  - `frequency_panel.py` - COM1/COM2/transponder display with LIVE sim data
   - `transmission_panel.py` - Text input with quick phrases and PTT button
   - `status_panel.py` - Connection status, volume control, polling indicator
+  - `system_tray.py` - System tray with minimize-to-tray
   - `styles.py` - Modern dark theme with accent colors
 - **Features**:
-  - Dark theme with modern glassmorphism-inspired design
-  - Auto-polling for new communications (2 second interval)
-  - Audio playback with volume control
-  - Quick phrase buttons for common responses
-  - Frequency swap/tune controls
+  - ✅ Dark theme with modern glassmorphism-inspired design
+  - ✅ Auto-polling for new communications (5 second interval)
+  - ✅ Audio playback with mpv/afplay (cross-platform)
+  - ✅ **Always on Top mode** for overlay over simulator
+  - ✅ **Compact Mode** for minimal overlay
+  - ✅ **Real-time frequency sync** from X-Plane
+  - ✅ Frequency swap buttons (control sim from GUI)
+  - ✅ System tray with minimize-to-tray
+  - ✅ Quick phrase buttons for common responses
 - **Run**: `.venv/bin/python client/src/main.py`
+
+### ✅ X-Plane Integration (Complete - Dec 27, 2024)
+- **Location**: `adapters/xplane/`
+- **Status**: Bidirectional communication working
+- **Components**:
+  - `PI_SayIntentions.py` - Main X-Plane plugin (XPPython3)
+  - `overlay.py` - Optional in-sim ImGui overlay
+- **Features**:
+  - ✅ Exports telemetry (position, attitude, frequencies) every 0.5s
+  - ✅ Reads commands to set frequencies/transponder
+  - ✅ Data exchange via JSON files in `~/.local/share/SayIntentionsAI/`
+  - ✅ Supports COM1/COM2 swap/tune from GUI
+- **DataRefs Supported**:
+  - COM1/COM2 active and standby frequencies
+  - Transponder code and mode
+  - Full position/attitude/speed telemetry
+- **Install**: Copy to `X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/`
 
 ---
 

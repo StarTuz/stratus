@@ -1,8 +1,9 @@
 """
-Core module for SayIntentions.AI native client.
+Core module for SayIntentionsML native client.
 
 Contains:
 - sapi_interface: SAPI REST API wrappers
+- sim_data: Simulator data interface (X-Plane telemetry)
 """
 
 from .sapi_interface import (
@@ -18,6 +19,13 @@ from .sapi_interface import (
     Entity
 )
 
+from .sim_data import (
+    SimDataInterface,
+    SimTelemetry,
+    RadioState,
+    TransponderState
+)
+
 __all__ = [
     "ISapiService",
     "SapiService", 
@@ -28,5 +36,9 @@ __all__ = [
     "WeatherData",
     "ParkingInfo",
     "Channel",
-    "Entity"
+    "Entity",
+    "SimDataInterface",
+    "SimTelemetry",
+    "RadioState",
+    "TransponderState"
 ]

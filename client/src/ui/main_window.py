@@ -31,6 +31,7 @@ from .workers import SimpleWorker
 from .system_tray import SystemTray
 
 from core.sapi_interface import SapiService, CommEntry, Channel
+from core.sim_data import SimDataInterface
 from audio import AudioHandler, PlayerState
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,20 @@ class MainWindow(QMainWindow):
         clear_action = QAction("&Clear History", self)
         clear_action.triggered.connect(lambda: self.comms_widget.clear_history())
         view_menu.addAction(clear_action)
+        
+        view_menu.addSeparator()
+        
+        # Always on top toggle
+        self.always_on_top_action = QAction("Always on &Top", self)
+        self.always_on_top_action.setCheckable(True)
+        self.always_on_top_action.triggered.connect(self._toggle_always_on_top)
+        view_menu.addAction(self.always_on_top_action)
+        
+        # Compact mode for overlay
+        self.compact_action = QAction("&Compact Mode", self)
+        self.compact_action.setCheckable(True)
+        self.compact_action.triggered.connect(self._toggle_compact_mode)
+        view_menu.addAction(self.compact_action)
         
         # Audio menu
         audio_menu = menubar.addMenu("&Audio")
@@ -217,6 +232,7 @@ class MainWindow(QMainWindow):
         
         # Frequency panel
         self.frequency_panel.tune_frequency.connect(self._on_tune_frequency)
+        self.frequency_panel.swap_frequency.connect(self._on_swap_frequency)
         
         # Thread-safe signals
         self.comms_updated.connect(self._handle_comms_update)
@@ -247,12 +263,20 @@ class MainWindow(QMainWindow):
         self.close()
     
     def _init_services(self):
-        """Initialize SAPI and audio services."""
+        """Initialize SAPI, audio, and sim data services."""
         # Initialize audio handler
         self.audio = AudioHandler()
         self.audio.on_playback_start = self._on_audio_start
         self.audio.on_playback_complete = self._on_audio_complete
         self.audio.on_state_change = self._on_audio_state_change
+        
+        # Initialize sim data interface for X-Plane communication
+        self.sim_data = SimDataInterface()
+        
+        # Start telemetry polling (every 500ms to update frequencies)
+        self._telemetry_timer = QTimer(self)
+        self._telemetry_timer.timeout.connect(self._update_telemetry)
+        self._telemetry_timer.start(500)
         
         # Disable transmission until connected
         self.transmission_panel.set_enabled(False)
@@ -552,6 +576,88 @@ class MainWindow(QMainWindow):
                 self.status_message.emit(f"Failed to tune: {response.error}")
         
         self._run_in_background(do_tune, on_result)
+    
+    @Slot(str)
+    def _on_swap_frequency(self, channel: str):
+        """Handle frequency swap request - send command to X-Plane."""
+        if channel == "COM1":
+            self.sim_data.swap_com1()
+        else:
+            self.sim_data.swap_com2()
+        self.status_bar.showMessage(f"Swapped {channel} frequencies")
+    
+    @Slot()
+    def _update_telemetry(self):
+        """Poll telemetry from X-Plane and update frequency panel."""
+        try:
+            telemetry = self.sim_data.read_telemetry()
+            
+            # Update frequency displays
+            if telemetry.com1.power:
+                self.frequency_panel.update_com1(
+                    telemetry.com1.active, 
+                    telemetry.com1.standby
+                )
+            else:
+                self.frequency_panel.update_com1("OFF", "---")
+            
+            if telemetry.com2.power:
+                self.frequency_panel.update_com2(
+                    telemetry.com2.active,
+                    telemetry.com2.standby
+                )
+            else:
+                self.frequency_panel.update_com2("OFF", "---")
+            
+            # Update transponder
+            self.frequency_panel.update_transponder(
+                telemetry.transponder.code,
+                telemetry.transponder.mode
+            )
+            
+        except Exception as e:
+            logger.debug(f"Telemetry update error: {e}")
+    
+    # =========================================================================
+    # View Options
+    # =========================================================================
+    
+    @Slot()
+    def _toggle_always_on_top(self):
+        """Toggle always-on-top mode for overlay use."""
+        is_on_top = self.always_on_top_action.isChecked()
+        
+        if is_on_top:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        else:
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowStaysOnTopHint)
+        
+        # Re-show the window (required after changing window flags)
+        self.show()
+        
+        self.status_bar.showMessage(f"Always on top: {'Enabled' if is_on_top else 'Disabled'}")
+        logger.info(f"Always on top: {is_on_top}")
+    
+    @Slot()
+    def _toggle_compact_mode(self):
+        """Toggle compact mode for overlay use over simulator."""
+        is_compact = self.compact_action.isChecked()
+        
+        if is_compact:
+            # Hide menu bar and right panel, shrink window
+            self.menuBar().hide()
+            self.frequency_panel.hide()
+            self.setMinimumSize(400, 300)
+            self.resize(450, 400)
+        else:
+            # Restore full UI
+            self.menuBar().show()
+            self.frequency_panel.show()
+            self.setMinimumSize(900, 600)
+            self.resize(1200, 800)
+        
+        self.status_bar.showMessage(f"Compact mode: {'Enabled' if is_compact else 'Disabled'}")
+        logger.info(f"Compact mode: {is_compact}")
     
     # =========================================================================
     # Misc
