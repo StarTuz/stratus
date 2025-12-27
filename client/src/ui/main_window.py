@@ -642,16 +642,26 @@ class MainWindow(QMainWindow):
         """Toggle always-on-top mode for overlay use."""
         is_on_top = self.always_on_top_action.isChecked()
         
-        if is_on_top:
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-        else:
-            self.setWindowFlags(self.windowFlags() & ~Qt.WindowStaysOnTopHint)
+        # We need to hide before changing flags
+        self.hide()
         
-        # Re-show the window (required after changing window flags)
+        current_flags = self.windowFlags()
+        
+        if is_on_top:
+            # maintain existing flags but add Top + Tool (Tool helps on Linux)
+            new_flags = current_flags | Qt.WindowStaysOnTopHint | Qt.Tool
+        else:
+            # Remove Top and Tool, restore standard window
+            new_flags = current_flags & ~Qt.WindowStaysOnTopHint & ~Qt.Tool
+            new_flags = new_flags | Qt.Window
+            
+        self.setWindowFlags(new_flags)
         self.show()
         
-        self.status_bar.showMessage(f"Always on top: {'Enabled' if is_on_top else 'Disabled'}")
-        logger.info(f"Always on top: {is_on_top}")
+        # Status update
+        state = "Enabled" if is_on_top else "Disabled"
+        self.status_bar.showMessage(f"Always on top: {state}")
+        logger.info(f"Always on top: {is_on_top}, Flags: {new_flags}")
     
     @Slot()
     def _toggle_compact_mode(self):

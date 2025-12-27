@@ -52,6 +52,13 @@ For CLI-only usage, see: python cli.py --help
         cli = SayIntentionsCLI()
         cli.cmdloop()
     else:
+        # Check for plugin installation before starting GUI
+        try:
+            from core.sim_installer import check_and_install
+            check_and_install()
+        except Exception as e:
+            logging.error(f"Failed to run auto-installer: {e}")
+            
         # Launch GUI
         from ui import run_gui
         run_gui()
