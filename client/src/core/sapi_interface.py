@@ -374,17 +374,38 @@ class SapiService(ISapiService):
         self.logger.info(f"sayAs: [{channel.value}] {message[:50]}...")
         return self._make_request("sayAs", params)
 
-    def get_comms_history(self) -> SapiResponse:
+    def get_comms_history(self, telemetry: Optional[Dict[str, Any]] = None) -> SapiResponse:
         """
         Get communication history with audio URLs.
         
         This is the **critical endpoint** for the native client.
         Returns all recent communications with downloadable audio file URLs.
         
+        Args:
+            telemetry: Optional dict of current aircraft state (lat, lon, alt, etc)
+                       to update the server with current position.
+        
         Returns:
             SapiResponse with data containing list of CommEntry objects
         """
-        response = self._make_request("getCommsHistory")
+        params = {}
+        if telemetry:
+            # Map standard telemetry fields to API params
+            # Note: We send these as query params to update state during polling
+            if "latitude" in telemetry: params["lat"] = telemetry["latitude"]
+            if "longitude" in telemetry: params["lon"] = telemetry["longitude"]
+            if "altitude_msl" in telemetry: params["alt"] = telemetry["altitude_msl"]
+            if "heading_mag" in telemetry: params["hdg"] = telemetry["heading_mag"]
+            if "groundspeed" in telemetry: params["spd"] = telemetry["groundspeed"]
+            if "on_ground" in telemetry: params["on_ground"] = str(telemetry["on_ground"]).lower()
+            
+            # Radios - SAPI needs to know what we are tuned to!
+            if "com1_active" in telemetry: params["com1"] = telemetry["com1_active"]
+            if "com2_active" in telemetry: params["com2"] = telemetry["com2_active"]
+            if "transponder_code" in telemetry: params["xpdr"] = telemetry["transponder_code"]
+            if "transponder_mode" in telemetry: params["xpdr_mode"] = telemetry["transponder_mode"]
+
+        response = self._make_request("getCommsHistory", params=params)
         
         if response.success and response.data:
             # Parse the comm_history array into CommEntry objects

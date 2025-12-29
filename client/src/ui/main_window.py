@@ -644,7 +644,28 @@ class MainWindow(QMainWindow):
         
         def do_poll():
             """This runs in background thread."""
-            response = self.sapi.get_comms_history()
+            # Get telemetry for position update
+            telemetry_data = None
+            if self.sim_data:
+                try:
+                    t = self.sim_data.read_telemetry()
+                    # Flatten telemetry for API
+                    telemetry_data = {
+                        "latitude": t.latitude,
+                        "longitude": t.longitude,
+                        "altitude_msl": t.altitude_msl,
+                        "heading_mag": t.heading_mag,
+                        "groundspeed": t.groundspeed,
+                        "on_ground": t.on_ground,
+                        "com1_active": t.com1.active,
+                        "com2_active": t.com2.active,
+                        "transponder_code": t.transponder.code,
+                        "transponder_mode": t.transponder.mode
+                    }
+                except Exception as e:
+                    pass  # Ignore telemetry read errors during poll
+
+            response = self.sapi.get_comms_history(telemetry=telemetry_data)
             if response.success and response.data:
                 return response.data
             return None
@@ -666,7 +687,27 @@ class MainWindow(QMainWindow):
         
         def do_refresh():
             """This runs in background thread."""
-            response = self.sapi.get_comms_history()
+            # Get telemetry for position update
+            telemetry_data = None
+            if self.sim_data:
+                try:
+                    t = self.sim_data.read_telemetry()
+                    telemetry_data = {
+                        "latitude": t.latitude,
+                        "longitude": t.longitude,
+                        "altitude_msl": t.altitude_msl,
+                        "heading_mag": t.heading_mag,
+                        "groundspeed": t.groundspeed,
+                        "on_ground": t.on_ground,
+                        "com1_active": t.com1.active,
+                        "com2_active": t.com2.active,
+                        "transponder_code": t.transponder.code,
+                        "transponder_mode": t.transponder.mode
+                    }
+                except Exception:
+                    pass
+
+            response = self.sapi.get_comms_history(telemetry=telemetry_data)
             return response
         
         def on_result(response):
