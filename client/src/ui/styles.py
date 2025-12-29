@@ -110,7 +110,13 @@ QPushButton#primaryButton:hover {{
 QPushButton#successButton {{
     background-color: {COLORS['accent_green']};
     border-color: {COLORS['accent_green']};
-    color: {COLORS['bg_primary']};
+    color: white;
+    font-weight: bold;
+}}
+
+QPushButton#successButton:hover {{
+    background-color: #00e676;
+    border-color: #00e676;
 }}
 
 QPushButton#pttButton {{
