@@ -368,10 +368,13 @@ class MainWindow(QMainWindow):
         self.close()
     
     def _init_services(self):
-        """Initialize SAPI, audio, and sim data services."""
-        # Initialize audio handler
+        self._polling = False
+        self._played_comm_ids = set()
+        self._initial_load_complete = False
+        
+        # Audio handler
         self.audio = AudioHandler()
-        self.audio.on_playback_start = self._on_audio_start
+        self.audio.state_changed.connect(self._on_audio_state_changed)
         self.audio.on_playback_complete = self._on_audio_complete
         self.audio.on_state_change = self._on_audio_state_change
         
@@ -573,6 +576,7 @@ class MainWindow(QMainWindow):
         """Handle disconnect button."""
         self._stop_polling()
         self.sapi = None
+        self._initial_load_complete = False  # Reset so we don't play old audio on reconnect
         self.connection_changed.emit(False, "Disconnected")
         self.status_bar.showMessage("Disconnected")
     
@@ -728,6 +732,13 @@ class MainWindow(QMainWindow):
         for entry in entries:
             if entry.atc_url:
                 comm_id = hash(entry.atc_url)
+                
+                # If this is the initial load, just mark as played without playing
+                # unless it's very recent (e.g. last 10 seconds)? For now, ignore all old history audio.
+                if not self._initial_load_complete:
+                    self._played_comm_ids.add(comm_id)
+                    continue
+                
                 if comm_id not in self._played_comm_ids:
                     self._played_comm_ids.add(comm_id)
                     # Queue in background to avoid any potential blocking
@@ -736,6 +747,10 @@ class MainWindow(QMainWindow):
                                freq=entry.frequency, msg=entry.outgoing_message: 
                             self.audio.queue_atc_audio(url, station, freq, msg)
                     )
+        
+        # Mark initial load as complete after processing the first batch
+        if not self._initial_load_complete:
+            self._initial_load_complete = True
     
     # =========================================================================
     # Audio
