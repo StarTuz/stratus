@@ -1,7 +1,7 @@
 """
 Audio Downloader Module
 
-Downloads audio files from SayIntentions cloud storage (S3).
+Downloads audio files from Stratus cloud storage (S3).
 Handles caching to avoid re-downloading the same files.
 """
 
@@ -31,10 +31,10 @@ class AudioDownloader:
     Downloads and caches audio files from URLs.
     
     Audio files are cached locally to avoid repeated downloads.
-    Cache is stored in ~/.cache/SayIntentionsAI/audio/
+    Cache is stored in ~/.cache/StratusAI/audio/
     """
     
-    DEFAULT_CACHE_DIR = "~/.cache/SayIntentionsAI/audio"
+    DEFAULT_CACHE_DIR = "~/.cache/StratusAI/audio"
     REQUEST_TIMEOUT = 30  # seconds
     
     def __init__(self, cache_dir: Optional[str] = None):
@@ -42,7 +42,7 @@ class AudioDownloader:
         Initialize the audio downloader.
         
         Args:
-            cache_dir: Custom cache directory. Defaults to ~/.cache/SayIntentionsAI/audio/
+            cache_dir: Custom cache directory. Defaults to ~/.cache/StratusAI/audio/
         """
         if cache_dir:
             self.cache_dir = Path(cache_dir).expanduser()

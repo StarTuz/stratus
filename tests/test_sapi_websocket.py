@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SayIntentions SAPI WebSocket Test
+Stratus SAPI WebSocket Test
 
-Tests WebSocket connectivity to the SayIntentions cloud.
+Tests WebSocket connectivity to the Stratus cloud.
 """
 
 import asyncio
@@ -29,14 +29,14 @@ def load_config():
     config.read(config_path)
     return {
         "api_key": config.get("sapi", "api_key", fallback=""),
-        "api_url": config.get("sapi", "api_url", fallback="https://apipri.sayintentions.ai"),
+        "api_url": config.get("sapi", "api_url", fallback="https://apipri.stratus.ai"),
     }
 
 
 async def test_websocket():
     """Test WebSocket connection to SAPI."""
     print("=" * 60)
-    print("SayIntentions SAPI WebSocket Test")
+    print("Stratus SAPI WebSocket Test")
     print("=" * 60)
     
     if not HAS_WEBSOCKETS:
@@ -73,7 +73,7 @@ async def test_websocket():
         headers = {
             "X-API-Key": api_key,
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "SayIntentionsAIml/0.1.0 (Linux)",
+            "User-Agent": "StratusAIml/0.1.0 (Linux)",
         }
         
         try:
@@ -86,7 +86,7 @@ async def test_websocket():
                 # Try sending a hello/auth message
                 auth_messages = [
                     {"type": "auth", "api_key": api_key},
-                    {"type": "hello", "client": "SayIntentionsAIml", "version": "0.1.0"},
+                    {"type": "hello", "client": "StratusAIml", "version": "0.1.0"},
                     {"action": "connect", "key": api_key},
                 ]
                 

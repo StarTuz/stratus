@@ -1,12 +1,12 @@
 """
-SayIntentions API (SAPI) Interface Module
+Stratus API (SAPI) Interface Module
 
-This module provides a complete Python interface to the SayIntentions cloud API.
+This module provides a complete Python interface to the Stratus cloud API.
 It handles all REST endpoint communication for the native Linux/Mac client.
 
-Base URL: https://apipri.sayintentions.ai/sapi/
+Base URL: https://apipri.stratus.ai/sapi/
 Authentication: API key as URL parameter (?api_key=XXX)
-Documentation: https://p2.sayintentions.ai/p2/docs/
+Documentation: https://p2.stratus.ai/p2/docs/
 """
 
 from abc import ABC, abstractmethod
@@ -124,55 +124,55 @@ class SapiResponse:
 # SAPI Interface (Abstract Base Class)
 # =============================================================================
 
-class ISapiService(ABC):
-    """Interface for the SayIntentions Cloud API (SAPI)"""
+class ISapiService:
 
-    @abstractmethod
+    """Interface for the Stratus Cloud API (SAPI)"""
+
     def connect(self, api_key: str) -> bool:
         """Authenticate/validate connection with the service"""
         pass
 
-    @abstractmethod
     def get_status(self) -> str:
         """Get current connection status"""
         pass
 
     # Communication endpoints
-    @abstractmethod
     def say_as(self, message: str, channel: Channel = Channel.COM1, 
                entity: Entity = Entity.ATC) -> SapiResponse:
         """Make an entity speak a message"""
         pass
 
-    @abstractmethod
-    def get_comms_history(self) -> SapiResponse:
-        """Get communication history with audio URLs"""
+    def get_comms_history(self, lat: Optional[float] = None, lon: Optional[float] = None) -> SapiResponse:
+        """Get communication history with audio URLs."""
         pass
 
+
     # Weather endpoints
-    @abstractmethod
     def get_weather(self, icao: str) -> SapiResponse:
         """Get weather (ATIS, METAR, TAF) for an airport"""
         pass
 
     # Airport operations
-    @abstractmethod
-    def assign_gate(self, gate: str) -> SapiResponse:
+    def assign_gate(self, gate: str, icao: Optional[str] = None) -> SapiResponse:
         """Request a specific gate assignment"""
         pass
 
-    @abstractmethod
+
     def get_parking(self) -> SapiResponse:
         """Get current assigned parking position"""
         pass
 
+    def reset_session(self, icao: str = "F70") -> SapiResponse:
+        """Force a session state refresh"""
+        pass
+
+
+
     # Flight management
-    @abstractmethod
     def set_frequency(self, freq: str, channel: Channel = Channel.COM1) -> SapiResponse:
         """Set radio frequency"""
         pass
 
-    @abstractmethod
     def set_pause(self, paused: bool) -> SapiResponse:
         """Pause/resume ATC simulation"""
         pass
@@ -185,10 +185,10 @@ class ISapiService(ABC):
 class SapiService(ISapiService):
     """
     Production implementation of the SAPI interface.
-    Communicates with the SayIntentions cloud backend via REST API.
+    Communicates with the Stratus cloud backend via REST API.
     """
     
-    BASE_URL = "https://apipri.sayintentions.ai/sapi"
+    BASE_URL = "https://apipri.stratus.ai/sapi"
     REQUEST_TIMEOUT = 10  # seconds
     
     def __init__(self, api_key: Optional[str] = None, config_path: Optional[str] = None):
@@ -209,7 +209,7 @@ class SapiService(ISapiService):
         elif not self._api_key:
             # Try default locations
             default_paths = [
-                os.path.expanduser("~/.config/sayintentionsai/config.ini"),
+                os.path.expanduser("~/.config/stratusai/config.ini"),
                 # From sapi_interface.py: client/src/core/ -> project root
                 os.path.join(os.path.dirname(__file__), "..", "..", "..", "config.ini"),
                 # From cli.py: client/src/ -> project root  
@@ -226,7 +226,7 @@ class SapiService(ISapiService):
         # Create session for connection pooling
         self._session = requests.Session()
         self._session.headers.update({
-            "User-Agent": "SayIntentionsML/1.0 (Linux)",
+            "User-Agent": "StratusML/1.0 (Linux)",
             "Accept": "application/json"
         })
 
@@ -239,7 +239,7 @@ class SapiService(ISapiService):
             self.logger.info(f"Loaded API key from {config_path}")
 
     def _make_request(self, endpoint: str, params: Optional[Dict] = None, 
-                      method: str = "GET") -> SapiResponse:
+                      method: str = "GET", json_data: Optional[Dict] = None) -> SapiResponse:
         """
         Make a request to the SAPI endpoint.
         
@@ -247,58 +247,69 @@ class SapiService(ISapiService):
             endpoint: API endpoint (e.g., "getCommsHistory")
             params: Additional query parameters
             method: HTTP method (GET or POST)
+            json_data: JSON payload for POST requests
             
         Returns:
             SapiResponse with success status and data/error
         """
         if not self._api_key:
-            return SapiResponse(success=False, error="No API key configured")
+            return SapiResponse(False, error="API key not configured")
+            
+        if endpoint.startswith("http"):
+            url = endpoint
+        else:
+            url = f"{self.BASE_URL}/{endpoint}"
         
-        url = f"{self.BASE_URL}/{endpoint}"
+        # SAPI prefers the X-API-Key header over query parameters
+        headers = {
+            "X-API-Key": self._api_key,
+            "Content-Type": "application/json"
+        }
+        
+        # But we'll keep the param as a fallback for older endpoints
         request_params = {"api_key": self._api_key}
         if params:
             request_params.update(params)
-        
+            
         try:
             if method.upper() == "GET":
                 response = self._session.get(
                     url, 
                     params=request_params, 
+                    headers=headers,
                     timeout=self.REQUEST_TIMEOUT
                 )
             else:
                 response = self._session.post(
                     url, 
                     params=request_params, 
+                    headers=headers,
+                    json=json_data,
                     timeout=self.REQUEST_TIMEOUT
                 )
             
-            response.raise_for_status()
+            # Log the request for debugging telemetry issues
+            self.logger.debug(f"SAPI {method} {endpoint}: {response.status_code}")
             
-            # Try to parse JSON, fall back to text
-            try:
-                data = response.json()
-            except ValueError:
-                data = response.text
-            
-            return SapiResponse(
-                success=True, 
-                data=data, 
-                status_code=response.status_code
-            )
-            
-        except requests.exceptions.Timeout:
-            self.logger.error(f"Request timeout for {endpoint}")
-            return SapiResponse(success=False, error="Request timeout")
-        except requests.exceptions.HTTPError as e:
-            self.logger.error(f"HTTP error for {endpoint}: {e}")
-            return SapiResponse(
-                success=False, 
-                error=str(e), 
-                status_code=e.response.status_code if e.response else 0
-            )
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    if isinstance(data, dict) and "error" in data:
+                        self.logger.warning(f"SAPI Logical Error: {data['error']}")
+                        return SapiResponse(False, error=data['error'], status_code=200)
+                    return SapiResponse(True, data=data, status_code=200)
+                except ValueError:
+                    # Some endpoints might return empty or non-JSON success
+                    return SapiResponse(True, status_code=200)
+            else:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", f"HTTP {response.status_code}")
+                except:
+                    error_msg = f"HTTP {response.status_code}: {response.text}"
+                return SapiResponse(False, error=error_msg, status_code=response.status_code)
+                
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Request error for {endpoint}: {e}")
             return SapiResponse(success=False, error=str(e))
 
     # -------------------------------------------------------------------------
@@ -370,11 +381,12 @@ class SapiService(ISapiService):
             "channel": channel.value,
             "entity": entity.value
         }
+
         
         self.logger.info(f"sayAs: [{channel.value}] {message[:50]}...")
         return self._make_request("sayAs", params)
 
-    def get_comms_history(self, telemetry: Optional[Dict[str, Any]] = None) -> SapiResponse:
+    def get_comms_history(self, lat: Optional[float] = None, lon: Optional[float] = None) -> SapiResponse:
         """
         Get communication history with audio URLs.
         
@@ -382,30 +394,20 @@ class SapiService(ISapiService):
         Returns all recent communications with downloadable audio file URLs.
         
         Args:
-            telemetry: Optional dict of current aircraft state (lat, lon, alt, etc)
-                       to update the server with current position.
-        
+            lat: Current latitude
+            lon: Current longitude
+            
         Returns:
             SapiResponse with data containing list of CommEntry objects
         """
         params = {}
-        if telemetry:
-            # Map standard telemetry fields to API params
-            # Note: We send these as query params to update state during polling
-            if "latitude" in telemetry: params["lat"] = telemetry["latitude"]
-            if "longitude" in telemetry: params["lon"] = telemetry["longitude"]
-            if "altitude_msl" in telemetry: params["alt"] = telemetry["altitude_msl"]
-            if "heading_mag" in telemetry: params["hdg"] = telemetry["heading_mag"]
-            if "groundspeed" in telemetry: params["spd"] = telemetry["groundspeed"]
-            if "on_ground" in telemetry: params["on_ground"] = str(telemetry["on_ground"]).lower()
+        if lat is not None:
+            params["lat"] = str(lat)
+        if lon is not None:
+            params["lon"] = str(lon)
             
-            # Radios - SAPI needs to know what we are tuned to!
-            if "com1_active" in telemetry: params["com1"] = telemetry["com1_active"]
-            if "com2_active" in telemetry: params["com2"] = telemetry["com2_active"]
-            if "transponder_code" in telemetry: params["xpdr"] = telemetry["transponder_code"]
-            if "transponder_mode" in telemetry: params["xpdr_mode"] = telemetry["transponder_mode"]
+        response = self._make_request("getCommsHistory", params)
 
-        response = self._make_request("getCommsHistory", params=params)
         
         if response.success and response.data:
             # Parse the comm_history array into CommEntry objects
@@ -450,17 +452,31 @@ class SapiService(ISapiService):
     # Airport Operations
     # -------------------------------------------------------------------------
 
-    def assign_gate(self, gate: str) -> SapiResponse:
+    def assign_gate(self, gate: str, icao: Optional[str] = None) -> SapiResponse:
         """
         Request assignment to a specific gate.
         
         Args:
             gate: Gate identifier (e.g., "A12", "B5")
+            icao: Optional ICAO code to force location update
             
         Returns:
             SapiResponse with result
         """
-        return self._make_request("assignGate", {"gate": gate})
+        params = {"gate": gate}
+        if icao:
+            params["icao"] = icao
+            # P2D specific endpoint for forcing location re-indexing
+            url = "https://p2d.stratus.ai/p2d/api/gateAssign"
+            headers = {"X-API-Key": self._api_key, "Content-Type": "application/json"}
+            payload = {"api_key": self._api_key, "icao": icao, "gate": gate}
+            try:
+                self.logger.info(f"Forcing location via gateAssign: {icao} @ {gate}")
+                self._session.post(url, json=payload, headers=headers, timeout=5)
+            except Exception as e:
+                self.logger.warning(f"p2d gateAssign failed: {e}")
+
+        return self._make_request("assignGate", params)
 
     def get_parking(self) -> SapiResponse:
         """
@@ -476,9 +492,33 @@ class SapiService(ISapiService):
         
         return response
 
+    def reset_session(self, icao: str = "F70") -> SapiResponse:
+
+        """
+        Force a session state refresh using the gateAssign and pause toggle tricks.
+        
+        Args:
+            icao: Target ICAO code (default F70)
+            
+        Returns:
+            SapiResponse indicating success
+        """
+        self.logger.info(f"Performing session reset for {icao}...")
+        
+        # 1. Force location via gateAssign
+        self.assign_gate("RAMP 1", icao=icao)
+        
+        # 2. Toggle pause (1 then 0) to trigger sidecar refresh
+        self.set_pause(True)
+        time.sleep(0.5)
+        self.set_pause(False)
+        
+        return SapiResponse(True)
+
     # -------------------------------------------------------------------------
     # Flight Management
     # -------------------------------------------------------------------------
+
 
     def set_frequency(self, freq: str, channel: Channel = Channel.COM1) -> SapiResponse:
         """
@@ -508,18 +548,137 @@ class SapiService(ISapiService):
         """
         return self._make_request("setPause", {"paused": str(paused).lower()})
 
-    def set_variable(self, name: str, value: Any) -> SapiResponse:
+    def set_variable(self, var: str, value: Any, category: str = "A") -> SapiResponse:
+
         """
-        Set a simulator variable.
+        Set a simulator variable via the REST API.
         
         Args:
-            name: Variable name
+            var: Variable name (e.g. "PLANE LATITUDE")
             value: Variable value
+            category: Variable category (default "L")
             
         Returns:
             SapiResponse with result
         """
-        return self._make_request("setVar", {"name": name, "value": str(value)})
+        return self._make_request("setVar", {
+            "var": var, 
+            "value": str(value),
+            "category": category
+        })
+
+    def update_telemetry(self, t: Dict[str, Any]) -> SapiResponse:
+        """
+        Update the server with current aircraft telemetry.
+        
+        This translates the native telemetry format to the EXHAUSTIVE 
+        SimAPI format required by the SAPI cloud brain.
+        
+        Args:
+            t: Dictionary containing aircraft state (position, radios, etc)
+            
+        Returns:
+            SapiResponse
+        """
+        # SAPI expects specific MSFS variable names. 
+        # Many of these are "Non-Negotiable" according to SimAPI spec.
+        on_ground = 1 if t.get("on_ground") else 0
+        
+        # Use Category 'A' (Aircraft) for physical location variables
+        # formatted to 6 decimal places for cloud precision
+        lat_val = t.get("latitude", 0.0)
+        lon_val = t.get("longitude", 0.0)
+        lat_str = f"{lat_val:.6f}"
+        lon_str = f"{lon_val:.6f}"
+
+        msfs_data = {
+            "sim": {
+                "variables": {
+                    # Essentials
+                    "PLANE LATITUDE": lat_str,
+                    "PLANE LONGITUDE": lon_str,
+                    "PLANE_LATITUDE": lat_str,
+                    "PLANE_LONGITUDE": lon_str,
+                    "PLANE ALTITUDE": t.get("altitude_msl", 0.0),
+                    "INDICATED ALTITUDE": t.get("altitude_msl", 0.0),
+
+                    "PLANE ALT ABOVE GROUND MINUS CG": 0 if on_ground else t.get("altitude_agl", 0.0),
+                    "SIM ON GROUND": on_ground,
+                    
+                    # Heading & Attitude
+                    "MAGNETIC COMPASS": t.get("heading_mag", 0.0),
+                    "PLANE HEADING DEGREES TRUE": t.get("heading_true", t.get("heading_mag", 0.0)),
+                    "MAGVAR": 12, # Realistic default or calculated
+                    "PLANE PITCH DEGREES": t.get("pitch", 0.0),
+                    "PLANE BANK DEGREES": t.get("roll", 0.0),
+                    
+                    # Speed
+                    "AIRSPEED INDICATED": t.get("ias", 0.0),
+                    "AIRSPEED TRUE": t.get("groundspeed", 0.0),
+                    "VERTICAL SPEED": t.get("vertical_speed", 0.0),
+                    "WHEEL RPM:1": 100 if (on_ground and t.get("groundspeed", 0.0) > 1) else 0,
+                    "WHEEL RPM:0": 100 if (on_ground and t.get("groundspeed", 0.0) > 1) else 0,
+                    
+                    # Radios (CRITICAL)
+                    "COM ACTIVE FREQUENCY:1": self._parse_freq(t.get("com1_active")),
+                    "COM STANDBY FREQUENCY:1": self._parse_freq(t.get("com1_standby")),
+                    "COM RECEIVE:1": 1,
+                    "COM TRANSMIT:1": 1,
+                    "COM ACTIVE FREQUENCY:2": self._parse_freq(t.get("com2_active")),
+                    "COM STANDBY FREQUENCY:2": self._parse_freq(t.get("com2_standby")),
+                    "COM RECEIVE:2": 0,
+                    "COM TRANSMIT:2": 0,
+                    "COM VOLUME:1": 80,
+                    "COM VOLUME:2": 80,
+                    "CIRCUIT COM ON:1": 1,
+                    "CIRCUIT COM ON:2": 1,
+                    "ELECTRICAL MASTER BATTERY:0": 1,
+                    
+                    # Transponder
+                    "TRANSPONDER CODE:1": int(t.get("transponder_code", "1200")),
+                    "TRANSPONDER STATE:1": self._map_xpdr_mode(t.get("transponder_mode", "STBY")),
+                    "TRANSPONDER IDENT": 0,
+                    
+                    # Performance Context
+                    "ENGINE TYPE": 0, # Piston
+                    "TOTAL WEIGHT": 2500,
+                    "TITLE": t.get("tail_number", "Native Client"),
+                    "ATC MODEL": t.get("icao_type", "C172"),
+                    "LOCAL TIME": time.time() % 86400,
+                    "ZULU TIME": time.time() % 86400
+                },
+                "exe": "StratusML.exe",
+                "simapi_version": "1.0",
+                "name": "X-Plane 12 (Native)",
+                "version": "1.0.0",
+                "adapter_version": "1.0.0"
+            }
+        }
+        
+        # Use the SIMAPI subdomain for telemetry ingestion
+        return self._make_request("https://apipri.stratus.ai/simapi/v1/input", method="POST", json_data=msfs_data)
+
+    def _parse_freq(self, freq_str: Any) -> float:
+        """Helper to parse frequency string to float."""
+        if not freq_str or freq_str == "---" or freq_str == "OFF":
+            return 0.0
+        try:
+            return float(freq_str)
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _map_xpdr_mode(self, mode_str: str) -> int:
+        """Map X-Plane transponder mode to MSFS transponder state."""
+        # MSFS: 0:Off, 1:Standby, 2:Test, 3:On, 4:Alt
+        mode_map = {
+            "OFF": 0,
+            "STBY": 1,
+            "TEST": 2,
+            "ON": 3,
+            "ALT": 4
+        }
+        return mode_map.get(mode_str.upper(), 1)
+
 
     # -------------------------------------------------------------------------
     # VATSIM Integration
@@ -602,8 +761,10 @@ class MockSapiService(ISapiService):
         ))
         return SapiResponse(success=True, data={"status": "ok"})
 
-    def get_comms_history(self) -> SapiResponse:
+    def get_comms_history(self, lat: Optional[float] = None, lon: Optional[float] = None) -> SapiResponse:
+        self.logger.debug(f"Mock getCommsHistory (Pos: {lat}, {lon})")
         return SapiResponse(success=True, data=self._mock_history)
+
 
     def get_weather(self, icao: str) -> SapiResponse:
         mock_wx = WeatherData(
@@ -614,13 +775,19 @@ class MockSapiService(ISapiService):
         )
         return SapiResponse(success=True, data=mock_wx)
 
-    def assign_gate(self, gate: str) -> SapiResponse:
-        return SapiResponse(success=True, data={"gate": gate, "status": "assigned"})
+    def assign_gate(self, gate: str, icao: Optional[str] = None) -> SapiResponse:
+        self.logger.info(f"Mock assignGate: {gate} (ICAO: {icao})")
+        return SapiResponse(success=True, data={"gate": gate, "icao": icao, "status": "assigned"})
 
     def get_parking(self) -> SapiResponse:
         return SapiResponse(success=True, data=ParkingInfo(
             gate="A1", latitude=39.327, longitude=-120.140, heading=270.0
         ))
+
+    def reset_session(self, icao: str = "F70") -> SapiResponse:
+        self.logger.info(f"Mock resetSession: {icao}")
+        return SapiResponse(True)
+
 
     def set_frequency(self, freq: str, channel: Channel = Channel.COM1) -> SapiResponse:
         return SapiResponse(success=True, data={"freq": freq, "channel": channel.value})

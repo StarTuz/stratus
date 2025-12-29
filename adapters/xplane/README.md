@@ -1,6 +1,6 @@
-# SayIntentionsML X-Plane Adapter
+# StratusML X-Plane Adapter
 
-A Python plugin for X-Plane 11/12 that provides bidirectional communication with the SayIntentionsML native client.
+A Python plugin for X-Plane 11/12 that provides bidirectional communication with the StratusML native client.
 
 ## Features
 
@@ -17,8 +17,8 @@ A Python plugin for X-Plane 11/12 that provides bidirectional communication with
   - Follow instructions to install `XPPython3` into `Resources/plugins/`
 
 ### Automatic Installation
-The SayIntentionsML client attempts to automatically install the adapter plugin to:
-`X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML`
+The StratusML client attempts to automatically install the adapter plugin to:
+`X-Plane/Resources/plugins/PythonPlugins/StratusML`
 
 If automatic installation fails, follow the manual steps below.
 
@@ -27,17 +27,17 @@ If automatic installation fails, follow the manual steps below.
 2. Copy the plugin folder:
    ```bash
    # Create the PythonPlugins directory if it doesn't exist (created by XPPython3 usually)
-   mkdir -p "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML"
+   mkdir -p "X-Plane/Resources/plugins/PythonPlugins/StratusML"
    
    # Copy files
-   cp PI_SayIntentions.py "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/"
-   cp overlay.py "X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/"
+   cp PI_Stratus.py "X-Plane/Resources/plugins/PythonPlugins/StratusML/"
+   cp overlay.py "X-Plane/Resources/plugins/PythonPlugins/StratusML/"
    ```
 3. Restart X-Plane.
 
 ## Data Exchange
 
-The plugin communicates with the client via JSON files in `~/.local/share/SayIntentionsAI/`:
+The plugin communicates with the client via JSON files in `~/.local/share/StratusAI/`:
 
 ### Telemetry (Plugin → Client)
 File: `simAPI_telemetry.json`
@@ -117,9 +117,9 @@ File: `simAPI_commands.json`
 - Check X-Plane log for errors
 
 ### No telemetry data
-- Verify the data directory exists: `ls ~/.local/share/SayIntentionsAI/`
-- Check if telemetry file is being updated: `tail -f ~/.local/share/SayIntentionsAI/simAPI_telemetry.json`
+- Verify the data directory exists: `ls ~/.local/share/StratusAI/`
+- Check if telemetry file is being updated: `tail -f ~/.local/share/StratusAI/simAPI_telemetry.json`
 
 ### Commands not working
-- Check X-Plane log for `[SayIntentionsML]` messages
+- Check X-Plane log for `[StratusML]` messages
 - Verify command file format is valid JSON

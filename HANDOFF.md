@@ -1,39 +1,72 @@
-# SayIntentionsML - Project Handoff
+# StratusML - Project Handoff
 
-**Date**: December 27, 2024  
-**Status**: ✅ **PHASE 1 COMPLETE - MVP Text Client Working**
+**Date**: December 29, 2024  
+**Status**: ⚠️ **CLIENT COMPLETE - SESSION CREATION BLOCKED**
 
 ---
 
 ## Executive Summary
 
-We have successfully proven that a **fully native Linux/Mac client for SayIntentions.AI is possible** without requiring the Windows client. This was achieved through:
+The native Linux client is **feature-complete** but **cannot establish sessions** due to Stratus architecture. The Windows client uses process detection (`GetProcessesByName`, `FindWindow`) that cannot see Linux-native X-Plane.
 
-1. Building a working X-Plane plugin that writes telemetry
-2. Discovering the complete SAPI REST API documentation
-3. **Live testing that confirmed comms history with audio URLs work**
+**Support request sent** to Stratus Discord requesting:
+- `POST /session/create` REST endpoint
+- Headless Linux sidecar
+- Process detection bypass
+
+### What Works Now (Read-Only)
+- ✅ Weather/ATIS via `getWX`
+- ✅ Historical comms with audio via `getCommsHistory`
+- ✅ Radio panel sync with X-Plane
+- ✅ Full Qt6 GUI
+
+### What's Blocked (Session Required)
+- ❌ Voice → ATC communication (`sayAs`)
+- ❌ Location-aware responses
+- ❌ Gate assignments (`assignGate`)
+
+---
+
+## Investigation Summary (Dec 28-29, 2024)
+
+Exhaustive reverse-engineering of Stratus session establishment:
+
+| Approach | Result |
+|----------|--------|
+| REST endpoints (sapi/v1/input, startFlight, etc.) | Server accepts, no session |
+| WebSocket (wss://comlink.stratus.ai) | Connection rejected |
+| Continuous 60-second telemetry | No session |
+| SimBrief integration with UserID | No session |
+| Exact DCS adapter format in Proton | Process detection blocks |
+| Dummy X-Plane.exe process in Wine | Not detected |
+
+**Root Cause**: Windows client checks for running Windows process. Linux X-Plane is invisible.
+
+---
+
+## Original Accomplishments
 
 ---
 
 ## What Was Accomplished
 
 ### ✅ X-Plane Plugin (Complete)
-- **Location**: `adapters/xplane/SayIntentionsAIml/lin_x64/SayIntentionsAIml.xpl`
+- **Location**: `adapters/xplane/StratusAIml/lin_x64/StratusAIml.xpl`
 - **Status**: Working, tested with X-Plane 12.3.3
 - **Features**:
   - Reads all essential DataRefs (position, radios, transponder, autopilot)
-  - Writes telemetry to `~/.local/share/SayIntentionsAI/simAPI_input.json` at 1Hz
-  - Custom log file (`sayintentionsaiml.log`) - doesn't pollute X-Plane's Log.txt
+  - Writes telemetry to `~/.local/share/StratusAI/simAPI_input.json` at 1Hz
+  - Custom log file (`stratusaiml.log`) - doesn't pollute X-Plane's Log.txt
 
 ### ✅ API Research (Complete)
-- **SAPI Documentation**: https://p2.sayintentions.ai/p2/docs/
-- **SimAPI Documentation**: https://sayintentionsai.freshdesk.com/support/solutions/articles/154000221017
+- **SAPI Documentation**: https://p2.stratus.ai/p2/docs/
+- **SimAPI Documentation**: https://stratusai.freshdesk.com/support/solutions/articles/154000221017
 - **API Key**: Obtained and validated (stored in `config.ini`, gitignored)
 
 ### ✅ Live Testing (Breakthrough!)
 ```bash
 # This command returned REAL DATA with audio URLs!
-curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
+curl "https://apipri.stratus.ai/sapi/getCommsHistory?api_key=XXX"
 
 # Response included:
 {
@@ -51,7 +84,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 
 ### ✅ Audio Module (Complete - Dec 27, 2024)
 - **Location**: `client/src/audio/`
-- **Status**: Working, tested with real SayIntentions audio URLs
+- **Status**: Working, tested with real Stratus audio URLs
 - **Components**:
   - `downloader.py` - Downloads audio from S3 URLs with local caching + ThreadPoolExecutor
   - `player.py` - Cross-platform player using external subprocess (mpv/afplay)
@@ -61,7 +94,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
   - **macOS**: Uses `afplay` (built-in)
 - **Features**:
   - Non-blocking audio (no Python GIL issues!)
-  - Local cache in `~/.cache/SayIntentionsAI/audio/`
+  - Local cache in `~/.cache/StratusAI/audio/`
   - Callbacks for playback start/complete events
   - Volume control, skip, queue management
 - **Test**: `python client/src/tests/test_audio.py`
@@ -157,18 +190,18 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 - **Location**: `adapters/xplane/`
 - **Status**: Bidirectional communication working
 - **Components**:
-  - `PI_SayIntentions.py` - Main X-Plane plugin (XPPython3)
+  - `PI_Stratus.py` - Main X-Plane plugin (XPPython3)
   - `overlay.py` - Optional in-sim ImGui overlay
 - **Features**:
   - ✅ Exports telemetry (position, attitude, frequencies) every 0.5s
   - ✅ Reads commands to set frequencies/transponder
-  - ✅ Data exchange via JSON files in `~/.local/share/SayIntentionsAI/`
+  - ✅ Data exchange via JSON files in `~/.local/share/StratusAI/`
   - ✅ Supports COM1/COM2 swap/tune from GUI
 - **DataRefs Supported**:
   - COM1/COM2 active and standby frequencies
   - Transponder code and mode
   - Full position/attitude/speed telemetry
-- **Install**: Copy to `X-Plane/Resources/plugins/PythonPlugins/SayIntentionsML/`
+- **Install**: Copy to `X-Plane/Resources/plugins/PythonPlugins/StratusML/`
 
 ---
 
@@ -183,12 +216,12 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 │                                                                  │
 │  1. PILOT INPUT                                                  │
 │     └─► sayAs API (text message)                                 │
-│         https://apipri.sayintentions.ai/sapi/sayAs?              │
+│         https://apipri.stratus.ai/sapi/sayAs?              │
 │         api_key=XXX&message=...&channel=COM1                     │
 │                           │                                      │
 │                           ▼                                      │
 │  2. CLOUD PROCESSING                                             │
-│     └─► SayIntentions processes, AI generates response           │
+│     └─► Stratus processes, AI generates response           │
 │                           │                                      │
 │                           ▼                                      │
 │  3. POLL FOR RESPONSE                                            │
@@ -222,7 +255,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 ## File Structure
 
 ```
-SayIntentionsML/
+StratusML/
 ├── README.md                          # Project overview
 ├── ASSESSMENT_AND_ROADMAP.md          # Technical feasibility
 ├── PROJECT_STATUS.md                  # Current status
@@ -234,10 +267,10 @@ SayIntentionsML/
 │       ├── README.md                  # Build instructions
 │       ├── setup_sdk.sh               # SDK download
 │       ├── src/
-│       │   └── sayintentions_plugin.c # Plugin source ✅
-│       └── SayIntentionsAIml/
+│       │   └── stratus_plugin.c # Plugin source ✅
+│       └── StratusAIml/
 │           └── lin_x64/
-│               └── SayIntentionsAIml.xpl  # Built plugin ✅
+│               └── StratusAIml.xpl  # Built plugin ✅
 │
 ├── client/                            # Python client
 │   ├── requirements.txt
@@ -276,8 +309,8 @@ SayIntentionsML/
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│                  SayIntentions Cloud (SAPI)                    │
-│              https://apipri.sayintentions.ai/sapi/             │
+│                  Stratus Cloud (SAPI)                    │
+│              https://apipri.stratus.ai/sapi/             │
 └───────────────────────────────▲───────────────────────────────┘
                                 │
                     REST API (HTTP GET)
@@ -323,11 +356,11 @@ SayIntentionsML/
 └───────────────────────────────┬───────────────────────────────┘
                                 │
                          JSON Files
-              ~/.local/share/SayIntentionsAI/
+              ~/.local/share/StratusAI/
                                 │
 ┌───────────────────────────────┴───────────────────────────────┐
 │                      X-Plane Plugin (C)                        │
-│                    SayIntentionsAIml.xpl ✅                    │
+│                    StratusAIml.xpl ✅                    │
 └───────────────────────────────────────────────────────────────┘
                                 │
                           DataRefs
@@ -391,13 +424,13 @@ SayIntentionsML/
 ## Key Resources
 
 ### Documentation
-- [SAPI API Docs](https://p2.sayintentions.ai/p2/docs/)
-- [SimAPI Developer Guide](https://sayintentionsai.freshdesk.com/support/solutions/articles/154000221017)
-- [SimVar Reference](https://portal.sayintentions.ai/simapi/v1/input_variables.txt)
-- [Sample Input JSON](https://portal.sayintentions.ai/simapi/v1/simapi_input.json)
+- [SAPI API Docs](https://p2.stratus.ai/p2/docs/)
+- [SimAPI Developer Guide](https://stratusai.freshdesk.com/support/solutions/articles/154000221017)
+- [SimVar Reference](https://portal.stratus.ai/simapi/v1/input_variables.txt)
+- [Sample Input JSON](https://portal.stratus.ai/simapi/v1/simapi_input.json)
 
 ### Community
-- [SayIntentions Discord](https://discord.gg/sayintentions) - For questions/support
+- [Stratus Discord](https://discord.gg/stratus) - For questions/support
 - [X-Plane Forum](https://forums.x-plane.org/) - X-Plane specific issues
 
 ### Development
@@ -420,7 +453,7 @@ SayIntentionsML/
 2. **Rate limits**: Any API rate limits we should be aware of?
 3. **Audio queue**: Best practice for handling multiple rapid responses?
 
-These can be answered through testing or by asking in the SayIntentions Discord.
+These can be answered through testing or by asking in the Stratus Discord.
 
 ---
 
@@ -436,4 +469,4 @@ These can be answered through testing or by asking in the SayIntentions Discord.
 
 ---
 
-*This handoff document was created on December 23, 2024 after confirming the feasibility of a native Linux/Mac SayIntentions client.*
+*This handoff document was created on December 23, 2024 after confirming the feasibility of a native Linux/Mac Stratus client.*

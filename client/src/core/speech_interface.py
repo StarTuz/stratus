@@ -1,5 +1,5 @@
 """
-Speech Interface for SayIntentionsML
+Speech Interface for StratusML
 Wraps the SpeechD-NG D-Bus service for TTS and STT functionality.
 """
 

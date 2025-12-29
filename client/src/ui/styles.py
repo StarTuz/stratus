@@ -1,5 +1,5 @@
 """
-SayIntentions GUI Styles
+Stratus GUI Styles
 
 Modern dark theme styling for the native Linux client.
 """

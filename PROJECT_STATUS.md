@@ -1,4 +1,4 @@
-# SayIntentions.AI ML - Project Status
+# Stratus.AI ML - Project Status
 
 **Last Updated**: December 23, 2024
 
@@ -23,11 +23,11 @@ On December 23, 2024, we confirmed that a **fully native Linux/Mac client is fea
 
 #### 1. X-Plane Native Plugin (Linux)
 - **Status**: Working ✅
-- **Location**: `adapters/xplane/SayIntentionsAIml/lin_x64/SayIntentionsAIml.xpl`
+- **Location**: `adapters/xplane/StratusAIml/lin_x64/StratusAIml.xpl`
 - **Features**:
   - Reads all essential DataRefs (position, radios, transponder, autopilot)
-  - Writes telemetry to `~/.local/share/SayIntentionsAI/simAPI_input.json` at 1Hz
-  - Own log file (`sayintentionsaiml.log`) - doesn't pollute X-Plane's Log.txt
+  - Writes telemetry to `~/.local/share/StratusAI/simAPI_input.json` at 1Hz
+  - Own log file (`stratusaiml.log`) - doesn't pollute X-Plane's Log.txt
   - Verified working in X-Plane 12.3.3
 
 #### 2. SAPI API Access
@@ -86,7 +86,7 @@ Now that we've confirmed feasibility, the next phase is building the client:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     SayIntentions Cloud                      │
+│                     Stratus Cloud                      │
 │                        (SAPI Server)                         │
 └────────────────────────────▲────────────────────────────────┘
                              │ API (needs key)
@@ -104,12 +104,12 @@ Now that we've confirmed feasibility, the next phase is building the client:
 │   simAPI_input.json ◄──────────────────────┤                 │
 │   simAPI_output.jsonl ─────────────────────►                 │
 │                                                              │
-│                 ~/.local/share/SayIntentionsAI/              │
+│                 ~/.local/share/StratusAI/              │
 └────────────────────────────────────────────┬────────────────┘
                                              │ Read/Write
 ┌────────────────────────────────────────────┴────────────────┐
 │                    X-Plane Plugin (C)                        │
-│                   SayIntentionsAIml.xpl                      │
+│                   StratusAIml.xpl                      │
 │                                                              │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │ DataRefs → JSON (1Hz) │ Commands → DataRefs (polling)  │ │
@@ -127,7 +127,7 @@ Now that we've confirmed feasibility, the next phase is building the client:
 ## Next Steps
 
 ### Immediate (Requires API Key)
-1. **Get SayIntentions API Key** - Needed to develop cloud integration
+1. **Get Stratus API Key** - Needed to develop cloud integration
 2. **Implement SAPI Client** - Audio streaming, command handling
 3. **Complete UI** - Status display, settings management
 
@@ -147,7 +147,7 @@ Now that we've confirmed feasibility, the next phase is building the client:
 ## File Structure
 
 ```
-SayIntentionsML/
+StratusML/
 ├── README.md                    # Project overview
 ├── ASSESSMENT_AND_ROADMAP.md    # Technical feasibility
 ├── PROJECT_STATUS.md            # This file
@@ -157,12 +157,12 @@ SayIntentionsML/
 │       ├── README.md            # Build instructions
 │       ├── setup_sdk.sh         # SDK download script
 │       ├── src/
-│       │   └── sayintentions_plugin.c  # Plugin source
+│       │   └── stratus_plugin.c  # Plugin source
 │       ├── SDK/                 # X-Plane SDK (downloaded)
 │       ├── build/               # Build artifacts
-│       └── SayIntentionsAIml/   # Built plugin (fat format)
+│       └── StratusAIml/   # Built plugin (fat format)
 │           └── lin_x64/
-│               └── SayIntentionsAIml.xpl  # Linux plugin ✅
+│               └── StratusAIml.xpl  # Linux plugin ✅
 ├── client/
 │   ├── requirements.txt
 │   └── src/
@@ -187,13 +187,13 @@ SayIntentionsML/
 
 | Blocker | Impact | Resolution |
 |---------|--------|------------|
-| **No API Key** | Cannot develop cloud communication | Request from SayIntentions |
+| **No API Key** | Cannot develop cloud communication | Request from Stratus |
 | **No macOS Hardware** | Cannot test macOS build | Find test machine or CI |
 
 ---
 
 ## Contacts / Resources
 
-- [SayIntentions.AI](https://sayintentions.ai) - Service provider
+- [Stratus.AI](https://stratus.ai) - Service provider
 - [X-Plane SDK](https://developer.x-plane.com/sdk/) - Plugin development
-- [SayIntentions Support](https://sayintentions.freshdesk.com) - Documentation
+- [Stratus Support](https://stratus.freshdesk.com) - Documentation

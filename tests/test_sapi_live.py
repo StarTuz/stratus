@@ -2,7 +2,7 @@
 """
 Live SAPI API Test Script
 
-Tests the SAPI module against the real SayIntentions API.
+Tests the SAPI module against the real Stratus API.
 Requires a valid API key in config.ini and preferably X-Plane running.
 """
 
@@ -166,7 +166,7 @@ def main():
     
     print("\n" + "="*60)
     print(" SAPI Live API Test Suite")
-    print(" SayIntentions.AI Native Client")
+    print(" Stratus.AI Native Client")
     print("="*60)
     
     # Find config

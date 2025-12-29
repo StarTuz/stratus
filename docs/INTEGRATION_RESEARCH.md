@@ -1,7 +1,7 @@
-# SayIntentions.AI Integration Research
+# Stratus.AI Integration Research
 
 **Date**: December 27, 2024  
-**Purpose**: Understanding how SayIntentions.AI works with flight simulators
+**Purpose**: Understanding how Stratus.AI works with flight simulators
 
 ---
 
@@ -13,7 +13,7 @@
 
 ---
 
-## Official SayIntentions Architecture
+## Official Stratus Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -53,10 +53,10 @@
 ### MSFS In-Sim Plugins (Community Folder)
 | Plugin | Description |
 |--------|-------------|
-| `sayintentions-efb` | Electronic Flight Bag panel inside MSFS |
-| `SayIntentions-VR-Toolbar-Plugin` | VR-specific toolbar integration |
-| `SayIntentions-SimObjects-Optional` | AI aircraft models |
-| `sayintentions-fly-in-library` | Scenery objects |
+| `stratus-efb` | Electronic Flight Bag panel inside MSFS |
+| `Stratus-VR-Toolbar-Plugin` | VR-specific toolbar integration |
+| `Stratus-SimObjects-Optional` | AI aircraft models |
+| `stratus-fly-in-library` | Scenery objects |
 
 ### X-Plane In-Sim Features
 | Feature | Description |
@@ -67,7 +67,7 @@
 
 ---
 
-## What We Currently Have (SayIntentionsML)
+## What We Currently Have (StratusML)
 
 ### ✅ Implemented
 | Component | Location | Status |
@@ -75,7 +75,7 @@
 | Desktop GUI Client | `client/src/ui/` | ✅ Working |
 | SAPI Communication | `client/src/core/sapi_interface.py` | ✅ Working |
 | Audio Playback | `client/src/audio/` | ✅ Working |
-| X-Plane Telemetry Plugin | `adapters/xplane/PI_SayIntentions.py` | ⚠️ Basic |
+| X-Plane Telemetry Plugin | `adapters/xplane/PI_Stratus.py` | ⚠️ Basic |
 
 ### ❌ Missing for Parity
 | Feature | Priority | Notes |
@@ -96,18 +96,18 @@
 ┌───────────────────────────────────────────────────────────────┐
 │  X-Plane 12                                                   │
 │  ┌─────────────────┐                                          │
-│  │ PI_SayIntentions│──▶ Writes telemetry to JSON file         │
+│  │ PI_Stratus│──▶ Writes telemetry to JSON file         │
 │  │ (Python Plugin) │                                          │
 │  └─────────────────┘                                          │
 │           │                                                   │
 │           ▼                                                   │
-│   ~/.local/share/SayIntentionsAI/simAPI_input.json            │
+│   ~/.local/share/StratusAI/simAPI_input.json            │
 │           │                                                   │
 └───────────────────────────────────────────────────────────────┘
            │
            ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  SayIntentionsML Client (reads JSON)                          │
+│  StratusML Client (reads JSON)                          │
 │  ┌──────────────────────────────────────────────────────────┐ │
 │  │  main.py ──▶ GUI (PySide6)                                │ │
 │  │     │                                                     │ │
@@ -122,7 +122,7 @@
 ┌───────────────────────────────────────────────────────────────┐
 │  X-Plane 12                                                   │
 │  ┌───────────────────────────────────────────────────────┐    │
-│  │  Enhanced PI_SayIntentions (Python Plugin)             │    │
+│  │  Enhanced PI_Stratus (Python Plugin)             │    │
 │  │  ┌───────────────┐  ┌────────────────┐  ┌───────────┐ │    │
 │  │  │ Telemetry OUT │  │ Frequency SYNC │  │ In-Sim UI │ │    │
 │  │  │ (position etc)│  │ (COM1/2, XPDR) │  │ (Overlay) │ │    │
@@ -197,9 +197,9 @@ For MSFS (future work):
 
 ---
 
-## Comparison: Official vs SayIntentionsML
+## Comparison: Official vs StratusML
 
-| Feature | Official (Windows) | SayIntentionsML | Gap |
+| Feature | Official (Windows) | StratusML | Gap |
 |---------|-------------------|-----------------|-----|
 | Desktop client | ✅ | ✅ | None |
 | Audio playback | ✅ | ✅ | None |

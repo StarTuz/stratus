@@ -1,8 +1,8 @@
 """
 ComLink Web Server
 
-A local web server providing a browser-based interface for SayIntentionsML.
-This mirrors the official SayIntentions ComLink feature, allowing users to:
+A local web server providing a browser-based interface for StratusML.
+This mirrors the official Stratus ComLink feature, allowing users to:
 - View communication history on a tablet/phone/second monitor
 - Tune frequencies by tapping them
 - Send quick transmissions
@@ -42,7 +42,7 @@ COMLINK_HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0a0a12">
-    <title>SayIntentionsML ComLink</title>
+    <title>StratusML ComLink</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <style>
@@ -689,7 +689,7 @@ COMLINK_HTML = """
         </section>
         
         <footer class="footer">
-            SayIntentionsML • Native Linux/Mac Client
+            StratusML • Native Linux/Mac Client
         </footer>
     </div>
     
@@ -939,7 +939,7 @@ COMLINK_HTML = """
 
 class ComLinkServer:
     """
-    Local web server providing browser-based interface to SayIntentionsML.
+    Local web server providing browser-based interface to StratusML.
     
     Features:
     - Real-time updates via WebSocket
@@ -979,7 +979,7 @@ class ComLinkServer:
         
         # Create Flask app
         self.app = Flask(__name__)
-        self.app.config['SECRET_KEY'] = 'sayintentionsml-comlink'
+        self.app.config['SECRET_KEY'] = 'stratusml-comlink'
         
         # Create SocketIO
         self.socketio = SocketIO(

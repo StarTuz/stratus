@@ -1,5 +1,5 @@
 """
-Core module for SayIntentionsML native client.
+Core module for StratusML native client.
 
 Contains:
 - sapi_interface: SAPI REST API wrappers

@@ -1,17 +1,17 @@
 # X-Plane Extensions & Integrations
 
-This document tracks potential extensions and integrations that could bring MSFS-level features to X-Plane users of SayIntentions.AI.
+This document tracks potential extensions and integrations that could bring MSFS-level features to X-Plane users of Stratus.AI.
 
 ## Overview
 
-The official SayIntentions client has reduced functionality on X-Plane compared to MSFS. This is due to platform differences, not intentional limitations. This document explores how community plugins and custom development could bridge these gaps.
+The official Stratus client has reduced functionality on X-Plane compared to MSFS. This is due to platform differences, not intentional limitations. This document explores how community plugins and custom development could bridge these gaps.
 
 ---
 
 ## 1. AI Traffic Integration
 
 ### The Gap
-SayIntentions on MSFS can inject AI traffic that appears in the sim and interacts with ATC. On X-Plane, this is not supported.
+Stratus on MSFS can inject AI traffic that appears in the sim and interacts with ATC. On X-Plane, this is not supported.
 
 ### Potential Solutions
 
@@ -22,7 +22,7 @@ World Traffic 3 is the most popular AI traffic solution for X-Plane.
 
 **Integration Approach**:
 - WT3 uses flight plan files to spawn traffic
-- We could write flight plans to WT3's folder based on SayIntentions traffic data
+- We could write flight plans to WT3's folder based on Stratus traffic data
 - WT3 exposes DataRefs for traffic positions
 
 **DataRefs**:
@@ -57,7 +57,7 @@ sim/multiplayer/position/plane1_phi  # Roll
 
 #### 1.3 Custom Traffic Plugin
 Build a dedicated traffic plugin that:
-1. Receives traffic data from SayIntentions (via the SimAPI JSON)
+1. Receives traffic data from Stratus (via the SimAPI JSON)
 2. Spawns OBJ models at correct positions
 3. Animates movement along defined paths
 
@@ -68,7 +68,7 @@ Build a dedicated traffic plugin that:
 ## 2. Ground Services Integration
 
 ### The Gap
-SayIntentions on MSFS can trigger ground services (pushback, fuel, catering). On X-Plane, no native ground services exist.
+Stratus on MSFS can trigger ground services (pushback, fuel, catering). On X-Plane, no native ground services exist.
 
 ### Potential Solutions
 
@@ -93,7 +93,7 @@ BetterPushback/disconnect            # Disconnect tug
 ```
 
 **Integration Approach**:
-When SayIntentions issues a "pushback approved" command:
+When Stratus issues a "pushback approved" command:
 1. Check `bp/can_pushback`
 2. If available, execute `BetterPushback/start` command
 3. Monitor `bp/started` for completion
@@ -150,7 +150,7 @@ opensam/dgs/toggle                  # Toggle docking guidance
 **Integration Approach**:
 When at a gate with OpenSAM support:
 1. Query `opensam/dgs/available`
-2. If available and SayIntentions assigns gate, enable DGS
+2. If available and Stratus assigns gate, enable DGS
 3. After parking, trigger `opensam/jw/toggle` to connect jetway
 
 **Feasibility**: High - Active development, good documentation
@@ -167,7 +167,7 @@ MSFS can display a follow-me car that guides the aircraft from runway to gate. X
 #### 3.1 Custom Follow-Me Plugin
 Build a plugin that:
 1. Loads a ground vehicle OBJ model
-2. Receives taxi route from SayIntentions (part of gate assignment data)
+2. Receives taxi route from Stratus (part of gate assignment data)
 3. Animates the vehicle along the route
 4. Player follows visually
 
@@ -206,7 +206,7 @@ MSFS has an in-sim EFB panel. X-Plane does not.
 AviTab provides an in-sim tablet with web browser capability.
 
 **Integration Approach**:
-1. SayIntentions could expose a web-based EFB at a local URL
+1. Stratus could expose a web-based EFB at a local URL
 2. User opens this URL in AviTab's browser
 3. Full EFB functionality available
 
@@ -251,13 +251,13 @@ Create a PySide6 window that overlays the sim:
 
 ## 6. DataRef Reference
 
-### SayIntentions Custom DataRefs (Proposed)
+### Stratus Custom DataRefs (Proposed)
 
 Our plugin could expose these DataRefs for other plugins to read:
 
 ```
 # Connection Status
-siai/connected                       # Connected to SayIntentions server
+siai/connected                       # Connected to Stratus server
 siai/mode                            # Current mode (0=off, 1=ATC, 2=copilot)
 
 # Current Clearance
@@ -280,7 +280,7 @@ siai/freq/next                       # Next frequency to tune
 ## 7. Development Notes
 
 ### Testing Without API Key
-Most extension work can proceed without a SayIntentions API key by:
+Most extension work can proceed without a Stratus API key by:
 1. Mocking the SimAPI input/output files
 2. Using test flight scenarios
 3. Validating plugin integrations independently

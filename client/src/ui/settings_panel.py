@@ -21,7 +21,9 @@ class SettingsPanel(QWidget):
     cabin_crew_toggled = Signal(bool)
     tour_guide_toggled = Signal(bool)
     mentor_toggled = Signal(bool)
+    session_reset_requested = Signal()
     settings_changed = Signal()  # Generic signal for any setting change
+
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -132,6 +134,25 @@ class SettingsPanel(QWidget):
         copilot_layout.addWidget(copilot_info)
         
         layout.addWidget(copilot_group)
+        
+        # Session Management
+        session_group = QGroupBox("Session Management")
+        session_layout = QVBoxLayout(session_group)
+        
+        self.reset_btn = QPushButton("🔄 Reset SAPI Session")
+        self.reset_btn.setToolTip("Force a session state refresh to resolve location issues (e.g. stuck at Truckee)")
+        self.reset_btn.clicked.connect(self.session_reset_requested.emit)
+        session_layout.addWidget(self.reset_btn)
+        
+        session_info = QLabel(
+            "Use this if ATC seems 'stuck' at your departure airport or doesn't recognize you've moved."
+        )
+        session_info.setWordWrap(True)
+        session_info.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 10px;")
+        session_layout.addWidget(session_info)
+        
+        layout.addWidget(session_group)
+
         
         layout.addStretch()
     

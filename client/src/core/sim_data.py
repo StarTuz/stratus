@@ -4,8 +4,8 @@ Sim Data Interface
 Reads telemetry from X-Plane plugin and writes commands to control the sim.
 
 Data files:
-  ~/.local/share/SayIntentionsAI/simAPI_telemetry.json  (plugin writes, we read)
-  ~/.local/share/SayIntentionsAI/simAPI_commands.json   (we write, plugin reads)
+  ~/.local/share/StratusAI/simAPI_telemetry.json  (plugin writes, we read)
+  ~/.local/share/StratusAI/simAPI_commands.json   (we write, plugin reads)
 """
 
 import os
@@ -64,6 +64,9 @@ class SimTelemetry:
     com2: RadioState = field(default_factory=RadioState)
     transponder: TransponderState = field(default_factory=TransponderState)
     
+    tail_number: str = "UNKNOWN"
+    icao_type: str = "C172"
+    
     # Metadata
     timestamp: float = 0.0
     sim: str = "unknown"
@@ -83,12 +86,12 @@ class SimDataInterface:
         Initialize the sim data interface.
         
         Args:
-            data_dir: Override the data directory (default: ~/.local/share/SayIntentionsAI)
+            data_dir: Override the data directory (default: ~/.local/share/StratusAI)
         """
         if data_dir:
             self.data_dir = Path(data_dir)
         else:
-            self.data_dir = Path.home() / ".local" / "share" / "SayIntentionsAI"
+            self.data_dir = Path.home() / ".local" / "share" / "StratusAI"
         
         self.telemetry_file = self.data_dir / "simAPI_telemetry.json"
         self.commands_file = self.data_dir / "simAPI_commands.json"
@@ -193,9 +196,9 @@ class SimDataInterface:
                 mode_int=xpdr_data.get("mode_int", 1)
             )
             
-            # Metadata
-            telemetry.timestamp = data.get("timestamp", 0.0)
-            telemetry.sim = data.get("sim", "unknown")
+            # Aircraft Info
+            telemetry.tail_number = data.get("tail_number", "UNKNOWN")
+            telemetry.icao_type = data.get("icao_type", "C172")
             
             self._last_telemetry = telemetry
             

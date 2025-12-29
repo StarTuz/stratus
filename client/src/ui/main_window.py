@@ -1,5 +1,5 @@
 """
-SayIntentions Main Window
+Stratus Main Window
 
 The primary GUI window for the native Linux client.
 Uses background threads for all SAPI network calls to prevent UI freezing.
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    """Main application window for SayIntentions client."""
+    """Main application window for Stratus client."""
     
     # Signals for thread-safe UI updates
     comms_updated = Signal(list)  # List of CommEntry
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self):
         """Configure the main window."""
-        self.setWindowTitle("SayIntentionsML - Native Mac/Linux Client")
+        self.setWindowTitle("StratusML - Native Mac/Linux Client")
         self.resize(1400, 850)
         self.setMinimumSize(1100, 700)
         
@@ -140,6 +140,12 @@ class MainWindow(QMainWindow):
         clear_action = QAction("&Clear History", self)
         clear_action.triggered.connect(lambda: self.comms_widget.clear_history())
         view_menu.addAction(clear_action)
+        
+        reset_action = QAction("&Reset SAPI Session", self)
+        reset_action.setToolTip("Force a session state refresh to resolve location issues")
+        reset_action.triggered.connect(self._reset_sapi_session)
+        view_menu.addAction(reset_action)
+
         
         view_menu.addSeparator()
         
@@ -266,8 +272,12 @@ class MainWindow(QMainWindow):
         self.frequency_panel.tune_frequency.connect(self._on_tune_frequency)
         self.frequency_panel.swap_frequency.connect(self._on_swap_frequency)
         
+        # Settings panel
+        self.settings_panel.session_reset_requested.connect(self._reset_sapi_session)
+        
         # Thread-safe signals
         self.comms_updated.connect(self._handle_comms_update)
+
         self.connection_changed.connect(self._handle_connection_change)
         self.audio_state_changed.connect(self._handle_audio_state)
         self.status_message.connect(self.status_bar.showMessage)
@@ -384,7 +394,8 @@ class MainWindow(QMainWindow):
         # Start telemetry polling (every 500ms to update frequencies)
         self._telemetry_timer = QTimer(self)
         self._telemetry_timer.timeout.connect(self._update_telemetry)
-        self._telemetry_timer.start(500)
+        self._telemetry_timer.start(2000)
+
         
         # Disable transmission until connected
         self.transmission_panel.set_enabled(False)
@@ -554,14 +565,14 @@ class MainWindow(QMainWindow):
             if sapi:
                 self.sapi = sapi
                 self.connection_changed.emit(True, "Connected")
-                self.status_message.emit("Connected to SayIntentions API")
+                self.status_message.emit("Connected to Stratus API")
                 self._refresh_history()
                 self._start_polling()
             else:
                 self.connection_changed.emit(False, "Connection failed")
                 self.status_message.emit("Failed to connect to SAPI")
                 QMessageBox.warning(self, "Connection Failed", 
-                    "Could not connect to SayIntentions API.\nCheck your API key in config.ini")
+                    "Could not connect to Stratus API.\nCheck your API key in config.ini")
         
         def on_error(error):
             """Handle connection error."""
@@ -644,29 +655,14 @@ class MainWindow(QMainWindow):
         
         def do_poll():
             """This runs in background thread."""
-            # Get telemetry for position update
-            telemetry_data = None
-            if self.sim_data:
-                try:
-                    t = self.sim_data.read_telemetry()
-                    # Flatten telemetry for API
-                    telemetry_data = {
-                        "latitude": t.latitude,
-                        "longitude": t.longitude,
-                        "altitude_msl": t.altitude_msl,
-                        "heading_mag": t.heading_mag,
-                        "groundspeed": t.groundspeed,
-                        "on_ground": t.on_ground,
-                        "com1_active": t.com1.active,
-                        "com2_active": t.com2.active,
-                        "transponder_code": t.transponder.code,
-                        "transponder_mode": t.transponder.mode
-                    }
-                except Exception as e:
-                    pass  # Ignore telemetry read errors during poll
-
-            response = self.sapi.get_comms_history(telemetry=telemetry_data)
+            telemetry = self.sim_data.read_telemetry()
+            response = self.sapi.get_comms_history(
+                lat=telemetry.latitude if telemetry else None,
+                lon=telemetry.longitude if telemetry else None
+            )
             if response.success and response.data:
+
+
                 return response.data
             return None
         
@@ -687,28 +683,14 @@ class MainWindow(QMainWindow):
         
         def do_refresh():
             """This runs in background thread."""
-            # Get telemetry for position update
-            telemetry_data = None
-            if self.sim_data:
-                try:
-                    t = self.sim_data.read_telemetry()
-                    telemetry_data = {
-                        "latitude": t.latitude,
-                        "longitude": t.longitude,
-                        "altitude_msl": t.altitude_msl,
-                        "heading_mag": t.heading_mag,
-                        "groundspeed": t.groundspeed,
-                        "on_ground": t.on_ground,
-                        "com1_active": t.com1.active,
-                        "com2_active": t.com2.active,
-                        "transponder_code": t.transponder.code,
-                        "transponder_mode": t.transponder.mode
-                    }
-                except Exception:
-                    pass
-
-            response = self.sapi.get_comms_history(telemetry=telemetry_data)
+            telemetry = self.sim_data.read_telemetry()
+            response = self.sapi.get_comms_history(
+                lat=telemetry.latitude if telemetry else None,
+                lon=telemetry.longitude if telemetry else None
+            )
             return response
+
+
         
         def on_result(response):
             """Handle result on UI thread."""
@@ -961,6 +943,67 @@ class MainWindow(QMainWindow):
                     }
                 })
             
+            # --- UPLINK TO SAPI CLOUD ---
+            now = time.time()
+            if self.sapi and self.sapi.is_connected and (not hasattr(self, '_last_sapi_uplink') or now - self._last_sapi_uplink >= 5.0):
+                self._last_sapi_uplink = now
+
+                
+                uplink_data = {
+                    "latitude": telemetry.latitude,
+                    "longitude": telemetry.longitude,
+                    "altitude_msl": telemetry.altitude_msl,
+                    "altitude_agl": telemetry.altitude_agl,
+                    "heading_mag": telemetry.heading_mag,
+                    "heading_true": telemetry.heading_true,
+                    "pitch": telemetry.pitch,
+                    "roll": telemetry.roll,
+                    "on_ground": telemetry.on_ground,
+                    "ias": telemetry.ias,
+                    "groundspeed": telemetry.groundspeed,
+                    "vertical_speed": telemetry.vertical_speed,
+                    "com1_active": telemetry.com1.active,
+                    "com1_standby": telemetry.com1.standby,
+                    "com2_active": telemetry.com2.active,
+                    "com2_standby": telemetry.com2.standby,
+                    "transponder_code": telemetry.transponder.code,
+                    "transponder_mode": telemetry.transponder.mode,
+                    "tail_number": telemetry.tail_number,
+                    "icao_type": telemetry.icao_type,
+                    "sim": "xplane",
+                    "timestamp": now
+                }
+
+                
+                self._run_in_background(
+                    lambda: self.sapi.update_telemetry(uplink_data),
+                    lambda response: logger.debug(f"SAPI Telemetry Uplink: {response.success}")
+                )
+                
+                # --- FORCE LOCATION UPDATE ---
+                # Some sessions need explicit variable sets to "snap" the brain to a new location
+                # We send both space and underscore versions for maximum compatibility
+                lat_str = f"{telemetry.latitude:.6f}"
+                lon_str = f"{telemetry.longitude:.6f}"
+                self._run_in_background(lambda: self.sapi.set_variable("PLANE LATITUDE", lat_str, "A"))
+                self._run_in_background(lambda: self.sapi.set_variable("PLANE LONGITUDE", lon_str, "A"))
+                self._run_in_background(lambda: self.sapi.set_variable("PLANE_LATITUDE", lat_str, "A"))
+                self._run_in_background(lambda: self.sapi.set_variable("PLANE_LONGITUDE", lon_str, "A"))
+
+
+
+
+                # --- EXPLICIT FREQUENCY SYNC ---
+                # Some SAPI sessions require explicit frequency setting via setFreq
+                if not hasattr(self, '_last_com1_uplink') or self._last_com1_uplink != telemetry.com1.active:
+                    self._last_com1_uplink = telemetry.com1.active
+                    self._run_in_background(lambda: self.sapi.set_frequency(telemetry.com1.active, Channel.COM1))
+                
+                if not hasattr(self, '_last_com2_uplink') or self._last_com2_uplink != telemetry.com2.active:
+                    self._last_com2_uplink = telemetry.com2.active
+                    self._run_in_background(lambda: self.sapi.set_frequency(telemetry.com2.active, Channel.COM2))
+
+            
         except Exception as e:
             logger.debug(f"Telemetry update error: {e}")
     
@@ -1021,11 +1064,11 @@ class MainWindow(QMainWindow):
     
     def _show_about(self):
         """Show about dialog."""
-        QMessageBox.about(self, "About SayIntentionsML",
-            "<h2>SayIntentionsML</h2>"
+        QMessageBox.about(self, "About StratusML",
+            "<h2>StratusML</h2>"
             "<p>Version 1.0.0 (Phase 2)</p>"
-            "<p>A native Mac/Linux client for the SayIntentions.AI ATC service.</p>"
-            "<p><a href='https://github.com/user/SayIntentionsML'>GitHub</a></p>"
+            "<p>A native Mac/Linux client for the Stratus.AI ATC service.</p>"
+            "<p><a href='https://github.com/user/StratusML'>GitHub</a></p>"
             "<hr>"
             "<p>This is an open-source community project.</p>"
         )
@@ -1037,7 +1080,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             self.hide()
             self.tray.show_notification(
-                "SayIntentionsML",
+                "StratusML",
                 "Application minimized to tray. Right-click tray icon to quit."
             )
             return
@@ -1123,7 +1166,35 @@ class MainWindow(QMainWindow):
             self.comlink.send_toast(f"Mentor {state}", "info")
 
 
+    @Slot()
+    def _reset_sapi_session(self):
+        """Force a session state refresh to resolve location issues."""
+        if not self.sapi or not self.sapi.is_connected:
+            self.status_bar.showMessage("Connect to SAPI before resetting session")
+            return
+            
+        telemetry = self.sim_data.read_telemetry()
+        icao = telemetry.icao_type if telemetry and telemetry.icao_type else "F70"
+        
+        self.status_bar.showMessage(f"Resetting SAPI session for {icao}...")
+        
+        def do_reset():
+            return self.sapi.reset_session(icao)
+            
+        def on_result(response):
+            if response.success:
+                self.comms_widget.clear_history()
+                self.status_bar.showMessage(f"Session reset successful for {icao}")
+                if self.comlink:
+                    self.comlink.send_toast(f"SAPI Session Reset: {icao}", "success")
+            else:
+                self.status_bar.showMessage(f"Reset failed: {response.error}")
+                
+        self._run_in_background(do_reset, on_result)
+
+
 def run_gui(enable_web: bool = True, web_port: int = 8080):
+
     """
     Run the GUI application.
     
@@ -1132,7 +1203,7 @@ def run_gui(enable_web: bool = True, web_port: int = 8080):
         web_port: Port for the ComLink web server (default: 8080)
     """
     app = QApplication(sys.argv)
-    app.setApplicationName("SayIntentionsML")
+    app.setApplicationName("StratusML")
     app.setApplicationVersion("1.0.0")
     
     window = MainWindow(enable_web=enable_web, web_port=web_port)

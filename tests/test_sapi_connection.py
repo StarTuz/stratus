@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SayIntentions SAPI API Test
+Stratus SAPI API Test
 
-Tests connectivity to the SayIntentions cloud API.
+Tests connectivity to the Stratus cloud API.
 """
 
 import configparser
@@ -26,7 +26,7 @@ def load_config() -> Dict[str, str]:
     config.read(config_path)
     return {
         "api_key": config.get("sapi", "api_key", fallback=""),
-        "api_url": config.get("sapi", "api_url", fallback="https://apipri.sayintentions.ai"),
+        "api_url": config.get("sapi", "api_url", fallback="https://apipri.stratus.ai"),
     }
 
 
@@ -38,7 +38,7 @@ def api_request(url: str, api_key: str, method: str = "GET",
     req.add_header("X-API-Key", api_key)
     req.add_header("Accept", "application/json")
     req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "SayIntentionsAIml/0.1.0 (Linux)")
+    req.add_header("User-Agent", "StratusAIml/0.1.0 (Linux)")
     
     if data:
         req.data = json.dumps(data).encode("utf-8")
@@ -63,7 +63,7 @@ def api_request(url: str, api_key: str, method: str = "GET",
 
 def main():
     print("=" * 60)
-    print("SayIntentions SAPI API Test")
+    print("Stratus SAPI API Test")
     print("=" * 60)
     
     # Load config

@@ -1,6 +1,6 @@
 # X-Plane 12 State of the Platform (December 2024)
 
-This document tracks X-Plane 12 features and SDK capabilities relevant to the SayIntentionsAIml project.
+This document tracks X-Plane 12 features and SDK capabilities relevant to the StratusAIml project.
 
 ---
 
@@ -30,13 +30,13 @@ X-Plane 12.1.3 introduced a **major ATC overhaul** that significantly changes th
 - **Diversion Support**: Change destination during approach
 
 ### Impact on Our Project
-⚠️ **Consideration**: X-Plane's built-in ATC is now much more capable. SayIntentions still offers:
+⚠️ **Consideration**: X-Plane's built-in ATC is now much more capable. Stratus still offers:
 - Natural language voice interaction
 - AI copilot features
 - Integration with real-world procedures
 - Better voice quality and variety
 
-But the "gap" between native ATC and SayIntentions is smaller on X-Plane 12.1+ than before.
+But the "gap" between native ATC and Stratus is smaller on X-Plane 12.1+ than before.
 
 ---
 
@@ -178,8 +178,8 @@ To target XPLM 4.0+ features:
    - Detect and use Web API if running 12.1.1+
 
 3. **Document ATC Comparison**
-   - Create comparison of X-Plane native ATC vs SayIntentions
-   - Highlight SayIntentions value-add features
+   - Create comparison of X-Plane native ATC vs Stratus
+   - Highlight Stratus value-add features
 
 ### Architecture Update
 

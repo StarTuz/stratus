@@ -1,5 +1,5 @@
 """
-UI Module for SayIntentionsML Client
+UI Module for StratusML Client
 
 Provides PySide6-based GUI components.
 """

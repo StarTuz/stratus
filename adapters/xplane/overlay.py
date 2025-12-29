@@ -1,5 +1,5 @@
 """
-SayIntentionsML X-Plane In-Sim Overlay
+StratusML X-Plane In-Sim Overlay
 
 Provides an in-sim widget showing:
 - Connection status
@@ -36,9 +36,9 @@ class CommMessage:
     is_atc: bool  # True = ATC, False = Pilot
 
 
-class SayIntentionsOverlay:
+class StratusOverlay:
     """
-    In-sim overlay widget for SayIntentionsML.
+    In-sim overlay widget for StratusML.
     
     Shows a small floating panel with recent communications.
     """
@@ -48,7 +48,7 @@ class SayIntentionsOverlay:
         self.messages: List[CommMessage] = []
         self.max_messages = 3
         
-        self.data_dir = Path.home() / ".local" / "share" / "SayIntentionsAI"
+        self.data_dir = Path.home() / ".local" / "share" / "StratusAI"
         self.comms_file = self.data_dir / "comms_display.json"
         
         # Window state
@@ -68,11 +68,11 @@ class SayIntentionsOverlay:
         """Initialize ImGui window."""
         # Register the window
         xp_imgui.create_window(
-            "SayIntentionsML",
+            "StratusML",
             self._draw_callback,
             visible=self.visible
         )
-        xp.log("[SayIntentionsML] Overlay initialized")
+        xp.log("[StratusML] Overlay initialized")
     
     def _draw_callback(self):
         """ImGui draw callback - renders the overlay content."""
@@ -89,7 +89,7 @@ class SayIntentionsOverlay:
         # Begin window
         imgui.set_next_window_size(self.window_width, self.window_height, imgui.COND_FIRST_USE_EVER)
         
-        expanded, opened = imgui.begin("SayIntentionsML", True, imgui.WINDOW_NO_COLLAPSE)
+        expanded, opened = imgui.begin("StratusML", True, imgui.WINDOW_NO_COLLAPSE)
         
         if expanded:
             # Status line
@@ -154,19 +154,19 @@ class SayIntentionsOverlay:
                 self.messages.append(msg)
             
         except Exception as e:
-            xp.log(f"[SayIntentionsML] Error reading comms: {e}")
+            xp.log(f"[StratusML] Error reading comms: {e}")
     
     def show(self):
         """Show the overlay."""
         self.visible = True
         if HAS_IMGUI:
-            xp_imgui.show_window("SayIntentionsML")
+            xp_imgui.show_window("StratusML")
     
     def hide(self):
         """Hide the overlay."""
         self.visible = False
         if HAS_IMGUI:
-            xp_imgui.hide_window("SayIntentionsML")
+            xp_imgui.hide_window("StratusML")
     
     def toggle(self):
         """Toggle overlay visibility."""
@@ -177,14 +177,14 @@ class SayIntentionsOverlay:
 
 
 # Global overlay instance
-_overlay: Optional[SayIntentionsOverlay] = None
+_overlay: Optional[StratusOverlay] = None
 
 
 def init_overlay():
     """Initialize the overlay (call from main plugin XPluginStart)."""
     global _overlay
     if HAS_IMGUI:
-        _overlay = SayIntentionsOverlay()
+        _overlay = StratusOverlay()
         return True
     else:
         # Note: When HAS_IMGUI is False, xp may also be None, so we can't log here

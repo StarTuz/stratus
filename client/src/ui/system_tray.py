@@ -53,7 +53,7 @@ def create_tray_icon_pixmap(size: int = 64, connected: bool = False) -> QPixmap:
 
 class SystemTray(QObject):
     """
-    System tray management for SayIntentionsML.
+    System tray management for StratusML.
     
     Provides:
     - Tray icon with status indicator
@@ -121,7 +121,7 @@ class SystemTray(QObject):
         self._tray_icon.activated.connect(self._on_activated)
         
         # Set tooltip
-        self._tray_icon.setToolTip("SayIntentionsML - Disconnected")
+        self._tray_icon.setToolTip("StratusML - Disconnected")
         
         # Show the tray icon
         self._tray_icon.show()
@@ -148,7 +148,7 @@ class SystemTray(QObject):
             self._status_action.setText(f"Status: {status_text or ('Connected' if connected else 'Disconnected')}")
         
         if self._tray_icon:
-            self._tray_icon.setToolTip(f"SayIntentionsML - {status_text or ('Connected' if connected else 'Disconnected')}")
+            self._tray_icon.setToolTip(f"StratusML - {status_text or ('Connected' if connected else 'Disconnected')}")
     
     def set_polling(self, polling: bool):
         """Update polling status."""

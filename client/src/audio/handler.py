@@ -33,7 +33,7 @@ class AudioQueueItem:
 
 class AudioHandler:
     """
-    High-level audio handler for SayIntentions ATC responses.
+    High-level audio handler for Stratus ATC responses.
     
     Manages downloading audio from URLs and playing them in sequence.
     All downloads are performed in background threads to prevent blocking.

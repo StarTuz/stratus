@@ -1,7 +1,7 @@
 """
 Simulator Plugin Installer
 
-Automatically detects X-Plane installations and installs the SayIntentionsML plugin.
+Automatically detects X-Plane installations and installs the StratusML plugin.
 mimicking the behavior of the official Windows client.
 """
 
@@ -25,7 +25,7 @@ XPLANE_PATHS = [
 
 # Source files for the plugin (relative to repository root or installed package)
 PLUGIN_FILES = {
-    "PI_SayIntentions.py": "adapters/xplane/PI_SayIntentions.py",
+    "PI_Stratus.py": "adapters/xplane/PI_Stratus.py",
     "overlay.py": "adapters/xplane/overlay.py"
 }
 
@@ -95,7 +95,7 @@ def install_plugin(xplane_path: Path) -> bool:
     try:
         plugins_dir = xplane_path / "Resources" / "plugins"
         python_plugins_dir = plugins_dir / "PythonPlugins"
-        target_dir = python_plugins_dir / "SayIntentionsML"
+        target_dir = python_plugins_dir / "StratusML"
         
         # 1. Ensure XPPython3 is installed
         if not install_xppython3(plugins_dir):
@@ -110,7 +110,7 @@ def install_plugin(xplane_path: Path) -> bool:
         target_dir = python_plugins_dir
         
         # 4. Locate source files
-        # client/src/core/sim_installer.py -> ... -> SayIntentionsML
+        # client/src/core/sim_installer.py -> ... -> StratusML
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
         
         for filename, rel_path in PLUGIN_FILES.items():
@@ -124,7 +124,7 @@ def install_plugin(xplane_path: Path) -> bool:
                 logger.error(f"Source file not found: {src_file}")
                 return False
                 
-        logger.info(f"Successfully installed SayIntentionsML plugin to: {target_dir}")
+        logger.info(f"Successfully installed StratusML plugin to: {target_dir}")
         return True
             
 

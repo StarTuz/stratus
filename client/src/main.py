@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SayIntentionsML - Native Mac/Linux Client
+StratusML - Native Mac/Linux Client
 
 Main entry point for the application.
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def main():
     parser = argparse.ArgumentParser(
-        description='SayIntentionsML - Native Mac/Linux Client',
+        description='StratusML - Native Mac/Linux Client',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
@@ -70,13 +70,13 @@ For CLI-only usage, see: python cli.py --help
     
     if args.cli:
         # Launch CLI
-        from cli import SayIntentionsCLI
-        cli = SayIntentionsCLI()
+        from cli import StratusCLI
+        cli = StratusCLI()
         cli.cmdloop()
     elif args.web:
         # Headless mode - web server only with audio playback
         print("=" * 60)
-        print("  SayIntentionsML - Headless Mode (Web + Audio Only)")
+        print("  StratusML - Headless Mode (Web + Audio Only)")
         print("=" * 60)
         run_headless(port=args.port)
     else:
@@ -154,7 +154,7 @@ def run_headless(port: int = 8080):
     # Connect to SAPI
     print("Connecting to SAPI...")
     if sapi.connect():
-        print("✓ Connected to SayIntentions API")
+        print("✓ Connected to Stratus API")
         comlink.update_connection_status(True, "Connected")
     else:
         print("✗ Failed to connect to SAPI (check config.ini)")

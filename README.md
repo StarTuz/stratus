@@ -1,11 +1,11 @@
-# SayIntentionsAIml - Linux & Mac Client for SayIntentions.AI
+# StratusAIml - Linux & Mac Client for Stratus.AI
 
 **Community / Open Source Port**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-brightgreen.svg)]()
 
-A native Linux and macOS client for the [SayIntentions.AI](https://sayintentions.ai) ATC service.
+A native Linux and macOS client for the [Stratus.AI](https://stratus.ai) ATC service.
 
 > **🎉 BREAKTHROUGH (Dec 23, 2024)**: Native client confirmed feasible!  
 > We have successfully tested the REST API and downloaded real ATC audio.  
@@ -14,14 +14,14 @@ A native Linux and macOS client for the [SayIntentions.AI](https://sayintentions
 > **Status**: Active Development  
 > **Current Focus**: Building the Python client
 
-## What is SayIntentions.AI?
+## What is Stratus.AI?
 
-SayIntentions.AI provides realistic AI-powered Air Traffic Control for flight simulators. Their official client is Windows-only. This project aims to bring native support to Linux and macOS users.
+Stratus.AI provides realistic AI-powered Air Traffic Control for flight simulators. Their official client is Windows-only. This project aims to bring native support to Linux and macOS users.
 
 ## Project Structure
 
 ```
-SayIntentionsML/
+StratusML/
 ├── client/                 # Native Python client (GUI + Audio)
 │   └── src/
 │       ├── core/          # Business logic & SAPI interface
@@ -30,7 +30,7 @@ SayIntentionsML/
 │
 ├── adapters/
 │   └── xplane/            # X-Plane Plugin (Python)
-│       ├── PI_SayIntentions.py  # Main plugin file
+│       ├── PI_Stratus.py  # Main plugin file
 │       └── overlay.py           # In-sim overlay widget
 │
 └── docs/                   # Documentation
@@ -113,7 +113,7 @@ This project uses **SimAPI**, the same file-based protocol as the official Windo
                                                │ REST/Audio
                                                ▼
                                       ┌──────────────────┐
-                                      │ SayIntentions.AI │
+                                      │ Stratus.AI │
                                       │ Cloud (SAPI)     │
                                       └──────────────────┘
 ```
@@ -138,5 +138,5 @@ MIT License
 
 ## Disclaimer
 
-This is an unofficial community project and is not affiliated with SayIntentions.AI. 
-Use of the SayIntentions.AI service requires a valid subscription from the official provider.
+This is an unofficial community project and is not affiliated with Stratus.AI. 
+Use of the Stratus.AI service requires a valid subscription from the official provider.

@@ -1,7 +1,7 @@
-# SayIntentions Client - Linux & Mac Port Assessment and Roadmap
+# Stratus Client - Linux & Mac Port Assessment and Roadmap
 
 ## Executive Summary
-Building a native Linux and Mac client for SayIntentions AI is **highly feasible**. The architecture of SayIntentions relies on a decoupled "SimAPI" (file-based JSON exchange) which allows the core client logic to be platform-agnostic, provided it can access the filesystem and audio devices.
+Building a native Linux and Mac client for Stratus AI is **highly feasible**. The architecture of Stratus relies on a decoupled "SimAPI" (file-based JSON exchange) which allows the core client logic to be platform-agnostic, provided it can access the filesystem and audio devices.
 
 The primary development effort will focus on two areas:
 1.  **The Native Client Application**: A cross-platform (Linux/macOS) application to handle User Interface, Audio I/O, API communication (SAPI), and File I/O (SimAPI).
@@ -15,7 +15,7 @@ The primary development effort will focus on two areas:
 
 ### 1.1 Core Components
 The system consists of three distinct parts:
-1.  **The Cloud Brain (SAPI)**: The remote SayIntentions server (`apipri.sayintentions.ai`) handling the LLM and logic.
+1.  **The Cloud Brain (SAPI)**: The remote Stratus server (`apipri.stratus.ai`) handling the LLM and logic.
 2.  **The Client App (The "Hub")**:
     *   **Responsibilities**: Authenticates user, captures microphone audio, streams audio to/from SAPI, reads `simAPI_input.json` (telemetry), writes `simAPI_output.jsonl` (commands).
     *   **Target Stack**: Python 3.10+ is recommended for rapid development and excellent cross-platform support for Audio (PyAudio/SoundDevice) and UI (PyQt6/PySide6).
@@ -23,7 +23,7 @@ The system consists of three distinct parts:
     *   **Responsibilities**: Reads simulator internal state, writes to `simAPI_input.json` (1Hz update), reads `simAPI_output.jsonl` and executes commands.
 
 ### 1.2 Data Exchange (SimAPI)
-The interface is entirely file-based, located ideally in a standard user directory (e.g., `~/.local/share/SayIntentionsAI` or `~/Documents/SayIntentionsAI`).
+The interface is entirely file-based, located ideally in a standard user directory (e.g., `~/.local/share/StratusAI` or `~/Documents/StratusAI`).
 *   **Input**: `simAPI_input.json` (Sim -> Client)
 *   **Output**: `simAPI_output.jsonl` (Client -> Sim)
 *   **Metadata**: `flight.json` (Auth/Session info)
@@ -35,7 +35,7 @@ The interface is entirely file-based, located ideally in a standard user directo
 ### 2.1 Linux (X-Plane & MSFS)
 *   **X-Plane (Native)**:
     *   X-Plane supports native Linux plugins (C/C++ or Python via XPPython3).
-    *   **Strategy**: Develop a Python-based X-Plane plugin (`PI_SayIntentions.py`) or a C++ plugin (`lin.xpl`) that queries DataRefs and dumps them to the JSON file.
+    *   **Strategy**: Develop a Python-based X-Plane plugin (`PI_Stratus.py`) or a C++ plugin (`lin.xpl`) that queries DataRefs and dumps them to the JSON file.
 *   **MSFS (Proton/Wine)**:
     *   MSFS does not run natively on Linux; it runs via Steam Proton (Wine).
     *   **Strategy**: The "Adapter" must run inside the Proton container to access SimConnect. We can attempt to run the existing Windows Adapter (from the Windows installer) inside the same Proton prefix, or write a lightweight SimConnect bridge.
@@ -75,7 +75,7 @@ To maximize code sharing between Linux and Mac (and potentially Windows):
 ### Phase 2: X-Plane Native Adapter (Weeks 3-4)
 *   **Goal**: Connect X-Plane (Linux) to the JSON SimAPI.
 *   **Tasks**:
-    1.  Develop `PI_SayIntentions.py` (XPPython3 Plugin).
+    1.  Develop `PI_Stratus.py` (XPPython3 Plugin).
     2.  Map core DataRefs (Lat, Lon, Alt, Heading, Radio Freqs, Transponder) to the SimAPI JSON schema.
     3.  Implement the file writer (1Hz update rate).
     4.  Implement the command reader (Poll `simAPI_output.jsonl` -> Apply DataRefs).
@@ -90,7 +90,7 @@ To maximize code sharing between Linux and Mac (and potentially Windows):
 ### Phase 4: MSFS Proton Integration (Week 7)
 *   **Goal**: Verify MSFS support on Linux.
 *   **Tasks**:
-    1.  Test running the official SayIntentions Windows Adapter executable inside the MSFS Proton prefix.
+    1.  Test running the official Stratus Windows Adapter executable inside the MSFS Proton prefix.
     2.  Configure directory bindings to ensure the Windows Adapter acts on the same JSON files as the Linux Client.
 
 ### Phase 5: Packaging & Release (Week 8)
@@ -104,13 +104,13 @@ To maximize code sharing between Linux and Mac (and potentially Windows):
 
 ## 5. X-Plane Feature Limitations (vs MSFS)
 
-The official SayIntentions Windows client has **reduced functionality** when used with X-Plane compared to MSFS. These limitations are documented by SayIntentions and represent potential opportunities for community tooling.
+The official Stratus Windows client has **reduced functionality** when used with X-Plane compared to MSFS. These limitations are documented by Stratus and represent potential opportunities for community tooling.
 
 ### 5.1 Features NOT Supported on X-Plane
 
 | Feature | MSFS | X-Plane | Notes |
 |---------|------|---------|-------|
-| **AI Traffic Injection** | ✅ | ❌ | SayIntentions can spawn AI traffic in MSFS; not possible in X-Plane via SimAPI |
+| **AI Traffic Injection** | ✅ | ❌ | Stratus can spawn AI traffic in MSFS; not possible in X-Plane via SimAPI |
 | **Follow-Me Cars** | ✅ | ❌ | Ground vehicle guidance to gates |
 | **Marshaller/Docking** | ✅ | ❌ | Visual docking guidance at gates |
 | **Pushback Tug Control** | ✅ | ❌ | Automatic pushback from gate |

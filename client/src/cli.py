@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SayIntentions CLI Client
+Stratus CLI Client
 
-A command-line interface for testing and using the SayIntentions API.
+A command-line interface for testing and using the Stratus API.
 This serves as both a development tool and a minimal working client.
 
 Usage:
@@ -40,12 +40,12 @@ logging.basicConfig(
 logger = logging.getLogger("cli")
 
 
-class SayIntentionsCLI(cmd.Cmd):
-    """Interactive CLI for SayIntentionsML"""
+class StratusCLI(cmd.Cmd):
+    """Interactive CLI for StratusML"""
     
     intro = """
 ╔══════════════════════════════════════════════════════════════════╗
-║           SayIntentionsML - Native Mac/Linux Client              ║
+║           StratusML - Native Mac/Linux Client              ║
 ║                    CLI Test Harness v0.1                         ║
 ╚══════════════════════════════════════════════════════════════════╝
 
@@ -74,7 +74,7 @@ Type 'quit' or 'exit' to exit.
         # Try to find config and auto-connect
         config_locations = [
             self.config_path,
-            os.path.expanduser("~/.config/sayintentionsai/config.ini"),
+            os.path.expanduser("~/.config/stratusai/config.ini"),
             os.path.join(os.path.dirname(__file__), "..", "..", "config.ini"),
         ]
         
@@ -119,13 +119,13 @@ Type 'quit' or 'exit' to exit.
     # =========================================================================
     
     def do_connect(self, arg):
-        """Connect to the SayIntentions API server.
+        """Connect to the Stratus API server.
         
         Usage: connect [api_key]
         
         If no API key is provided, will try to load from config.ini
         """
-        print("Connecting to SayIntentions API...")
+        print("Connecting to Stratus API...")
         
         api_key = arg.strip() if arg else None
         
@@ -528,7 +528,7 @@ Type 'quit' or 'exit' to exit.
 
 def run_cli(args):
     """Run in interactive CLI mode."""
-    cli = SayIntentionsCLI(config_path=args.config)
+    cli = StratusCLI(config_path=args.config)
     
     # Auto-connect if requested
     if args.auto_connect:
@@ -600,7 +600,7 @@ def run_oneshot(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='SayIntentionsML CLI Client',
+        description='StratusML CLI Client',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

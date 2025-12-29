@@ -1,12 +1,12 @@
 """
-SayIntentionsML Copilot Module
+StratusML Copilot Module
 
 Provides AI copilot functionality that automatically handles ATC communications:
 - Parses ATC messages for frequency changes and auto-tunes
 - Detects squawk code assignments and sets transponder
 - Manages copilot mode state
 
-This mirrors the official SayIntentions.AI copilot feature.
+This mirrors the official Stratus.AI copilot feature.
 """
 
 import re

@@ -1,4 +1,4 @@
-# SayIntentions API (SAPI) Findings
+# Stratus API (SAPI) Findings
 
 **Date**: December 23, 2024  
 **API Key Tested**: s4GH8119xFyX (confirmed working)
@@ -7,14 +7,14 @@
 
 ## 🎉 BREAKTHROUGH: Native Client Confirmed Working!
 
-After reviewing the official SAPI documentation at https://p2.sayintentions.ai/p2/docs/, we found that **audio communication works via REST API + audio file URLs** - not real-time streaming!
+After reviewing the official SAPI documentation at https://p2.stratus.ai/p2/docs/, we found that **audio communication works via REST API + audio file URLs** - not real-time streaming!
 
 ### Live Test Results (December 23, 2024)
 
 **With X-Plane running and our plugin writing telemetry:**
 
 ```bash
-curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
+curl "https://apipri.stratus.ai/sapi/getCommsHistory?api_key=XXX"
 ```
 
 **Response (REAL DATA!):**
@@ -43,9 +43,9 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 
 ## API Overview
 
-**Base URL**: `https://apipri.sayintentions.ai/sapi/`  
+**Base URL**: `https://apipri.stratus.ai/sapi/`  
 **Authentication**: API key as URL parameter (`?api_key=XXX`)  
-**Documentation**: https://p2.sayintentions.ai/p2/docs/
+**Documentation**: https://p2.stratus.ai/p2/docs/
 
 ---
 
@@ -60,7 +60,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 │     OR: Use keyboard/text input                                   │
 │                                                                   │
 │  2. SEND: POST sayAs?api_key=XXX&message=...&channel=COM1         │
-│     → Pilot's message sent to SayIntentions cloud                 │
+│     → Pilot's message sent to Stratus cloud                 │
 │                                                                   │
 │  3. POLL: GET getCommsHistory?api_key=XXX                         │
 │     → Returns JSON with audio file URLs:                          │
@@ -120,8 +120,8 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 ## Files and Session Management
 
 ### flight.json
-- Location: `%LOCALAPPDATA%\SayIntentionsAI\flight.json` (Windows)
-- Linux equivalent: `~/.local/share/SayIntentionsAI/flight.json`
+- Location: `%LOCALAPPDATA%\StratusAI\flight.json` (Windows)
+- Linux equivalent: `~/.local/share/StratusAI/flight.json`
 - Contains: `api_key`, current frequencies, flight status
 - **We should read this for session context**
 
@@ -130,7 +130,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 - Contains: Aircraft telemetry, position, radios, transponder
 
 ### simAPI_output.jsonl
-- SayIntentions writes commands to this
+- Stratus writes commands to this
 - Our plugin should read and execute ⏳ (TODO)
 
 ---
@@ -139,8 +139,8 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│                  SayIntentions Cloud (SAPI)                    │
-│  https://apipri.sayintentions.ai/sapi/                        │
+│                  Stratus Cloud (SAPI)                    │
+│  https://apipri.stratus.ai/sapi/                        │
 └───────────────────────────────▲───────────────────────────────┘
                                 │
                     REST API (HTTP GET/POST)
@@ -177,7 +177,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
                                 │
 ┌───────────────────────────────┴───────────────────────────────┐
 │                      X-Plane Plugin (C)                        │
-│                    SayIntentionsAIml.xpl ✅                    │
+│                    StratusAIml.xpl ✅                    │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -213,7 +213,7 @@ curl "https://apipri.sayintentions.ai/sapi/getCommsHistory?api_key=XXX"
 
 ## Resources
 
-- [SAPI Documentation](https://p2.sayintentions.ai/p2/docs/)
-- [SimAPI Developer Guide](https://sayintentionsai.freshdesk.com/support/solutions/articles/154000221017)
-- [SimVar List](https://portal.sayintentions.ai/simapi/v1/input_variables.txt)
-- [Sample Input JSON](https://portal.sayintentions.ai/simapi/v1/simapi_input.json)
+- [SAPI Documentation](https://p2.stratus.ai/p2/docs/)
+- [SimAPI Developer Guide](https://stratusai.freshdesk.com/support/solutions/articles/154000221017)
+- [SimVar List](https://portal.stratus.ai/simapi/v1/input_variables.txt)
+- [Sample Input JSON](https://portal.stratus.ai/simapi/v1/simapi_input.json)

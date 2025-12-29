@@ -1,5 +1,5 @@
 """
-Audio module for SayIntentionsML client.
+Audio module for StratusML client.
 
 Provides audio playback capabilities for ATC responses.
 """

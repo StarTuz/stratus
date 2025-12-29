@@ -1,0 +1,9 @@
+{
+    "sim": {
+        "variables": {
+            "PLANE LATITUDE": 33.5,
+            "PLANE LONGITUDE": -117.1
+        },
+        "version": "1.0"
+    }
+}

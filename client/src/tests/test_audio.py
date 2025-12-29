@@ -12,7 +12,7 @@ Usage:
     # Test with a specific MP3 file
     python test_audio.py /path/to/audio.mp3
 
-    # Test with a real SayIntentions audio URL
+    # Test with a real Stratus audio URL
     python test_audio.py "https://siaudio.s3.us-west-1.amazonaws.com/XXXX.mp3"
 """
 
@@ -222,7 +222,7 @@ def main():
     args = parser.parse_args()
     
     print("="*60)
-    print("SayIntentionsML Audio Module Test")
+    print("StratusML Audio Module Test")
     print("="*60)
     
     results = []
