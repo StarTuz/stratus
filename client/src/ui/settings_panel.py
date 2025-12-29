@@ -20,6 +20,7 @@ class SettingsPanel(QWidget):
     atc_mode_changed = Signal(str)  # "student", "standard", "pro"
     cabin_crew_toggled = Signal(bool)
     tour_guide_toggled = Signal(bool)
+    mentor_toggled = Signal(bool)
     settings_changed = Signal()  # Generic signal for any setting change
     
     def __init__(self, parent=None):
@@ -101,6 +102,18 @@ class SettingsPanel(QWidget):
         self.tour_guide_check.toggled.connect(self._on_tour_guide_toggled)
         crew_layout.addWidget(self.tour_guide_check)
         
+        # Mentor toggle
+        self.mentor_check = QCheckBox("Enable Mentor (Flight Instructor)")
+        self.mentor_check.setToolTip(
+            "AI flight instructor answers your questions:\n"
+            "• 'How do I level off the plane?'\n"
+            "• 'What's the proper way to lean the mixture?'\n"
+            "• 'When should I lower the flaps?'\n"
+            "Ask via INTERCOM channel!"
+        )
+        self.mentor_check.toggled.connect(self._on_mentor_toggled)
+        crew_layout.addWidget(self.mentor_check)
+        
         layout.addWidget(crew_group)
         
         # Copilot Options (reference to main copilot toggle)
@@ -159,12 +172,18 @@ class SettingsPanel(QWidget):
         self.tour_guide_toggled.emit(enabled)
         self.settings_changed.emit()
     
+    def _on_mentor_toggled(self, enabled: bool):
+        """Handle mentor toggle."""
+        self.mentor_toggled.emit(enabled)
+        self.settings_changed.emit()
+    
     def get_settings(self) -> dict:
         """Get all current settings."""
         return {
             "atc_mode": self.atc_mode_combo.currentText().lower(),
             "cabin_crew_enabled": self.cabin_crew_check.isChecked(),
-            "tour_guide_enabled": self.tour_guide_check.isChecked()
+            "tour_guide_enabled": self.tour_guide_check.isChecked(),
+            "mentor_enabled": self.mentor_check.isChecked()
         }
     
     def set_settings(self, settings: dict):
@@ -178,3 +197,6 @@ class SettingsPanel(QWidget):
         
         if "tour_guide_enabled" in settings:
             self.tour_guide_check.setChecked(settings["tour_guide_enabled"])
+        
+        if "mentor_enabled" in settings:
+            self.mentor_check.setChecked(settings["mentor_enabled"])

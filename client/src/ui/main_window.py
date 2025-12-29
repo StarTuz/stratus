@@ -281,6 +281,7 @@ class MainWindow(QMainWindow):
         self.settings_panel.atc_mode_changed.connect(self._on_atc_mode_changed)
         self.settings_panel.cabin_crew_toggled.connect(self._on_cabin_crew_toggled)
         self.settings_panel.tour_guide_toggled.connect(self._on_tour_guide_toggled)
+        self.settings_panel.mentor_toggled.connect(self._on_mentor_toggled)
     
     def _setup_tray(self):
         """Initialize system tray."""
@@ -987,6 +988,21 @@ class MainWindow(QMainWindow):
         if self.comlink:
             state = "enabled" if enabled else "disabled"
             self.comlink.send_toast(f"Tour guide {state}", "info")
+    
+    @Slot(bool)
+    def _on_mentor_toggled(self, enabled: bool):
+        """Handle mentor toggle from settings panel."""
+        logger.info(f"Mentor {'enabled' if enabled else 'disabled'}")
+        
+        if enabled:
+            self.status_bar.showMessage("👨‍✈️ Mentor enabled - ask questions via intercom")
+            # TODO: Activate mentor entity via SAPI intercom
+        else:
+            self.status_bar.showMessage("Mentor disabled")
+        
+        if self.comlink:
+            state = "enabled" if enabled else "disabled"
+            self.comlink.send_toast(f"Mentor {state}", "info")
 
 
 def run_gui(enable_web: bool = True, web_port: int = 8080):

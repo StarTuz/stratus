@@ -45,6 +45,7 @@ class Entity(Enum):
     CREW = "crew"              # Cabin crew announcements
     DISPATCHER = "dispatcher"
     TOUR_GUIDE = "tourguide"   # VFR landmarks and points of interest
+    MENTOR = "mentor"          # Virtual flight instructor - answers questions
 
 
 @dataclass
