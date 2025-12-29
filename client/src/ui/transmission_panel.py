@@ -20,6 +20,9 @@ class TransmissionPanel(QWidget):
     # Emitted when user sends a transmission
     send_transmission = Signal(str, str)  # message, channel
     
+    # Emitted when copilot is toggled
+    copilot_toggled = Signal(bool)  # enabled
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self._current_channel = "COM1"
@@ -57,6 +60,15 @@ class TransmissionPanel(QWidget):
         """)
         self.channel_btn.clicked.connect(self._toggle_channel)
         header_layout.addWidget(self.channel_btn)
+        
+        # Copilot toggle
+        self.copilot_btn = QPushButton("🤖 Copilot")
+        self.copilot_btn.setFixedWidth(90)
+        self.copilot_btn.setCheckable(True)
+        self.copilot_btn.setToolTip("Enable AI copilot to handle ATC communications")
+        self._update_copilot_style(False)
+        self.copilot_btn.clicked.connect(self._toggle_copilot)
+        header_layout.addWidget(self.copilot_btn)
         
         layout.addLayout(header_layout)
         
@@ -180,3 +192,38 @@ class TransmissionPanel(QWidget):
             self.text_input.setPlaceholderText("Connect to SAPI to transmit...")
         else:
             self.text_input.setPlaceholderText("Type your transmission... (Enter to send)")
+    
+    def _toggle_copilot(self):
+        """Toggle copilot mode."""
+        enabled = self.copilot_btn.isChecked()
+        self._update_copilot_style(enabled)
+        self.copilot_toggled.emit(enabled)
+    
+    def _update_copilot_style(self, enabled: bool):
+        """Update copilot button style based on state."""
+        if enabled:
+            self.copilot_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('accent_primary')};
+                    color: white;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }}
+            """)
+        else:
+            self.copilot_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {get_color('bg_secondary')};
+                    color: {get_color('text_secondary')};
+                    font-weight: normal;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background-color: {get_color('bg_tertiary')};
+                }}
+            """)
+    
+    def set_copilot_active(self, active: bool):
+        """Set copilot button state (called when copilot handles a comm)."""
+        self.copilot_btn.setChecked(active)
+        self._update_copilot_style(active)

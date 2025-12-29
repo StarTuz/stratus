@@ -500,6 +500,36 @@ COMLINK_HTML = """
             transform: scale(0.95);
         }
         
+        /* Copilot Toggle */
+        .copilot-toggle {
+            padding: 6px 14px;
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        
+        .copilot-toggle:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-secondary);
+        }
+        
+        .copilot-toggle.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+            animation: copilotPulse 2s infinite;
+        }
+        
+        @keyframes copilotPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+            50% { box-shadow: 0 0 10px 4px rgba(139, 92, 246, 0.2); }
+        }
+        
         /* Empty State */
         .empty-state {
             text-align: center;
@@ -635,6 +665,7 @@ COMLINK_HTML = """
         <section class="transmit-section">
             <div class="transmit-header">
                 <span>✈️ Transmit</span>
+                <button id="copilot-toggle" class="copilot-toggle" onclick="toggleCopilot()" title="Enable AI Copilot to handle ATC communications">🤖 Copilot</button>
                 <button id="channel-toggle" class="channel-toggle com1" onclick="toggleChannel()">COM1</button>
             </div>
             <div class="transmit-input-row">
@@ -666,6 +697,7 @@ COMLINK_HTML = """
         // State
         let currentChannel = 'COM1';
         let connected = false;
+        let copilotEnabled = false;
         let socket = null;
         
         // Initialize WebSocket connection
@@ -705,6 +737,9 @@ COMLINK_HTML = """
             updateConnectionStatus(state.sapi_connected, state.status_text);
             updateTelemetry(state.telemetry);
             updateComms(state.comms);
+            if (state.copilot !== undefined) {
+                updateCopilotStatus(state.copilot.enabled);
+            }
         }
         
         // Update connection status
@@ -859,6 +894,28 @@ COMLINK_HTML = """
             setTimeout(() => toast.remove(), 3000);
         }
         
+        // Toggle copilot
+        function toggleCopilot() {
+            copilotEnabled = !copilotEnabled;
+            socket.emit('toggle_copilot', { enabled: copilotEnabled });
+            updateCopilotStatus(copilotEnabled);
+            showToast(copilotEnabled ? '🤖 Copilot enabled' : 'Copilot disabled', 
+                      copilotEnabled ? 'success' : 'info');
+        }
+        
+        // Update copilot status
+        function updateCopilotStatus(enabled) {
+            copilotEnabled = enabled;
+            const btn = document.getElementById('copilot-toggle');
+            if (enabled) {
+                btn.classList.add('active');
+                btn.textContent = '🤖 Copilot ON';
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '🤖 Copilot';
+            }
+        }
+        
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
             initSocket();
@@ -910,6 +967,7 @@ class ComLinkServer:
         self.on_tune_standby: Optional[Callable[[str, str], None]] = None
         self.on_swap_frequency: Optional[Callable[[str], None]] = None
         self.on_play_audio: Optional[Callable[[str], None]] = None
+        self.on_toggle_copilot: Optional[Callable[[bool], None]] = None
         
         # State cache
         self._state = {
@@ -1011,6 +1069,16 @@ class ComLinkServer:
             logger.info(f"WebSocket: play_audio {url[:50]}...")
             if self.on_play_audio:
                 self.on_play_audio(url)
+        
+        @self.socketio.on('toggle_copilot')
+        def handle_toggle_copilot(data):
+            enabled = data.get('enabled', False)
+            logger.info(f"WebSocket: toggle_copilot -> {enabled}")
+            if self.on_toggle_copilot:
+                self.on_toggle_copilot(enabled)
+            # Broadcast updated copilot state
+            self._state["copilot"] = {"enabled": enabled}
+            self._broadcast_state()
     
     # =========================================================================
     # State Update Methods (called by main app)

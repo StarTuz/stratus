@@ -34,6 +34,7 @@ from .system_tray import SystemTray
 
 from core.sapi_interface import SapiService, CommEntry, Channel
 from core.sim_data import SimDataInterface
+from core.copilot import Copilot, CopilotMode, get_copilot
 from audio import AudioHandler, PlayerState
 
 # Optional: ComLink web server (may not be available if flask not installed)
@@ -73,6 +74,9 @@ class MainWindow(QMainWindow):
         self._web_port = web_port
         self.comlink: Optional[ComLinkServer] = None
         self._cached_comms: List[Dict[str, Any]] = []  # For ComLink sync
+        
+        # Copilot
+        self.copilot = get_copilot()
         
         # Initialize
         self._setup_window()
@@ -287,6 +291,7 @@ class MainWindow(QMainWindow):
             self.comlink.on_tune_standby = self._comlink_tune_standby
             self.comlink.on_swap_frequency = self._comlink_swap_frequency
             self.comlink.on_play_audio = self._comlink_play_audio
+            self.comlink.on_toggle_copilot = self._comlink_toggle_copilot
             
             # Start the server
             self.comlink.start()
@@ -323,6 +328,17 @@ class MainWindow(QMainWindow):
         if self.audio:
             self.audio.queue_atc_audio(url, "ATC", "", "")
     
+    def _comlink_toggle_copilot(self, enabled: bool):
+        """Handle copilot toggle from ComLink web interface."""
+        if enabled:
+            self.copilot.enable(CopilotMode.FULL)
+            self.status_bar.showMessage("🤖 Copilot enabled from ComLink")
+        else:
+            self.copilot.disable()
+            self.status_bar.showMessage("Copilot disabled from ComLink")
+        # Sync the GUI button state
+        self.transmission_panel.set_copilot_active(enabled)
+    
     def _show_from_tray(self):
         """Show window from tray."""
         self.showNormal()
@@ -352,6 +368,66 @@ class MainWindow(QMainWindow):
         
         # Disable transmission until connected
         self.transmission_panel.set_enabled(False)
+        
+        # Initialize copilot callbacks
+        self._init_copilot()
+    
+    def _init_copilot(self):
+        """Initialize copilot with callbacks."""
+        # Set up copilot actions
+        self.copilot.on_frequency_change = self._copilot_tune_frequency
+        self.copilot.on_squawk_change = self._copilot_set_squawk
+        self.copilot.on_instruction_detected = self._copilot_instruction
+        
+        # Connect transmission panel copilot toggle
+        self.transmission_panel.copilot_toggled.connect(self._on_copilot_toggled)
+        
+        logger.info("Copilot initialized")
+    
+    def _copilot_tune_frequency(self, frequency: str, channel: str):
+        """Copilot auto-tunes a frequency."""
+        logger.info(f"Copilot tuning {channel} to {frequency}")
+        if channel == "COM1":
+            self.sim_data.set_com1_standby(frequency)
+            self.sim_data.swap_com1()  # Swap to make it active
+        else:
+            self.sim_data.set_com2_standby(frequency)
+            self.sim_data.swap_com2()
+        
+        # Update status
+        self.status_bar.showMessage(f"🤖 Copilot tuned {channel} to {frequency}")
+        
+        # Also update ComLink
+        if self.comlink:
+            self.comlink.send_toast(f"Copilot tuned {frequency}", "success")
+    
+    def _copilot_set_squawk(self, code: str):
+        """Copilot sets transponder code."""
+        logger.info(f"Copilot setting squawk to {code}")
+        self.sim_data.set_transponder_code(code)
+        self.status_bar.showMessage(f"🤖 Copilot set squawk {code}")
+        
+        if self.comlink:
+            self.comlink.send_toast(f"Copilot set squawk {code}", "success")
+    
+    def _copilot_instruction(self, description: str):
+        """Called when copilot detects an instruction."""
+        logger.info(f"Copilot instruction: {description}")
+        # Could show in a dedicated copilot status area
+    
+    @Slot(bool)
+    def _on_copilot_toggled(self, enabled: bool):
+        """Handle copilot toggle from UI."""
+        if enabled:
+            self.copilot.enable(CopilotMode.FULL)
+            self.status_bar.showMessage("🤖 Copilot enabled - handling ATC communications")
+            if self.comlink:
+                self.comlink.send_toast("Copilot enabled", "success")
+        else:
+            self.copilot.disable()
+            self.status_bar.showMessage("Copilot disabled")
+            if self.comlink:
+                self.comlink.send_toast("Copilot disabled", "info")
     
     def _run_in_background(self, func, on_result=None, on_error=None):
         """
@@ -561,6 +637,19 @@ class MainWindow(QMainWindow):
                 })
             self._cached_comms = comms_dicts
             self.comlink.update_comms(comms_dicts)
+        
+        # Process messages through copilot (for auto-tune, auto-squawk)
+        for entry in entries:
+            if entry.outgoing_message:  # ATC messages
+                comm_id = hash(entry.outgoing_message + str(entry.timestamp))
+                if comm_id not in self._played_comm_ids:
+                    # Let copilot parse the message
+                    actions = self.copilot.process_atc_message(
+                        entry.outgoing_message, 
+                        entry.station_name
+                    )
+                    if actions:
+                        logger.info(f"Copilot actions: {actions}")
             
         # Auto-play new audio (runs in background to avoid blocking)
         for entry in entries:
