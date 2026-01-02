@@ -146,6 +146,7 @@ class PythonInterface:
         # Aircraft Info
         # =====================================================================
         self.dr_tailnum = xp.findDataRef("sim/aircraft/view/acf_tailnum")
+        self.dr_livery_path = xp.findDataRef("sim/aircraft/view/acf_livery_path")
         self.dr_icao = xp.findDataRef("sim/aircraft/view/acf_ICAO")
         
         # =====================================================================
@@ -200,6 +201,58 @@ class PythonInterface:
         """Convert transponder mode int to string."""
         modes = {0: "OFF", 1: "STBY", 2: "ON", 3: "TEST", 4: "ALT"}
         return modes.get(mode, "UNK")
+
+    def _get_best_tail_number(self) -> str:
+        """
+        Get the best available tail number.
+        
+        Strategy:
+        1. Try standard acf_tailnum.
+        2. If that fails or is generic, try to parse from livery path.
+        """
+        # 1. Standard dataref (from .acf or livery.cfg)
+        tail = xp.getDatas(self.dr_tailnum).strip()
+        livery_path = xp.getDatas(self.dr_livery_path)
+        
+        # DEBUG: Unconditional log to see what's happening
+        xp.log(f"[StratusML] DEBUG: tail='{tail}', livery_path='{livery_path}'")
+        
+        # 2. Check for generic/invalid tail numbers
+        # Sometimes unconfigured planes return just the ICAO type or empty string
+        is_suspicious = (
+            not tail or 
+            tail == xp.getDatas(self.dr_icao) or 
+            len(tail) < 3 or
+            tail == "N1234"
+        )
+        
+        if not is_suspicious:
+            return tail
+            
+        # 3. Fallback: Try to get from livery folder name
+        # Path example: "Aircraft/Heavy Metal/B738/.../N123AB/"
+        try:
+            livery_path = xp.getDatas(self.dr_livery_path)
+            xp.log(f"[StratusML] Generic tail '{tail}' detected. Checking livery path: '{livery_path}'")
+            
+            if livery_path:
+                # Get the storage folder name (often the tail number)
+                # Remove trailing slash if present
+                if livery_path.endswith(os.path.sep):
+                    livery_path = livery_path[:-1]
+                
+                folder_name = os.path.basename(livery_path)
+                xp.log(f"[StratusML] Extracted folder name: '{folder_name}'")
+                
+                # Heuristic: If folder name looks like a registration (3-7 chars), use it
+                if 3 <= len(folder_name) <= 10:
+                    return folder_name
+        except Exception as e:
+            xp.log(f"[StratusML] Error parsing livery path: {e}")
+            pass
+            
+        return tail if tail else "UNKNOWN"
+
     
     def _write_telemetry(self):
         """Write current aircraft state to telemetry file."""
@@ -277,7 +330,7 @@ class PythonInterface:
             },
             
             # Aircraft Info
-            "tail_number": xp.getDatas(self.dr_tailnum),
+            "tail_number": self._get_best_tail_number(),
             "icao_type": xp.getDatas(self.dr_icao),
             
             # Metadata

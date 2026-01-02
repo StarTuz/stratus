@@ -6,7 +6,7 @@ Provides configuration for ATC mode, cabin crew, tour guide, and other options.
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
-    QCheckBox, QGroupBox, QFrame, QPushButton
+    QCheckBox, QGroupBox, QFrame, QPushButton, QLineEdit
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -23,8 +23,16 @@ class SettingsPanel(QWidget):
     mentor_toggled = Signal(bool)
     session_reset_requested = Signal()
     settings_changed = Signal()  # Generic signal for any setting change
-
     
+    # Identity Override signals
+    callsign_override_changed = Signal(str)
+    aircraft_type_override_changed = Signal(str)
+    
+    # Brain Management signals
+    brain_start_requested = Signal()
+    brain_pull_requested = Signal(str)
+
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
@@ -38,6 +46,34 @@ class SettingsPanel(QWidget):
         title = QLabel("⚙️ Settings")
         title.setObjectName("headerLabel")
         layout.addWidget(title)
+        
+        # Aircraft Identity (Overrides)
+        identity_group = QGroupBox("Aircraft Identity (Overrides)")
+        identity_layout = QVBoxLayout(identity_group)
+        
+        # Callsign Input
+        callsign_label = QLabel("Callsign Override:")
+        callsign_label.setStyleSheet(f"color: {get_color('text_secondary')};")
+        identity_layout.addWidget(callsign_label)
+        
+        self.callsign_input = QLineEdit()
+        self.callsign_input.setPlaceholderText("Auto (from Simulator)")
+        self.callsign_input.setToolTip("Enter a callsign (e.g. 'D-ERMI') to override the simulator's tail number.")
+        self.callsign_input.textChanged.connect(self._on_callsign_changed)
+        identity_layout.addWidget(self.callsign_input)
+        
+        # Type Input
+        type_label = QLabel("Aircraft Type Override:")
+        type_label.setStyleSheet(f"color: {get_color('text_secondary')};")
+        identity_layout.addWidget(type_label)
+        
+        self.type_input = QLineEdit()
+        self.type_input.setPlaceholderText("Auto (from Simulator)")
+        self.type_input.setToolTip("Enter ICAO type (e.g. 'PA28') to override simulator data.")
+        self.type_input.textChanged.connect(self._on_type_changed)
+        identity_layout.addWidget(self.type_input)
+        
+        layout.addWidget(identity_group)
         
         # ATC Experience Mode
         atc_group = QGroupBox("ATC Experience")
@@ -134,13 +170,49 @@ class SettingsPanel(QWidget):
         copilot_layout.addWidget(copilot_info)
         
         layout.addWidget(copilot_group)
+
+        # Local AI Brain (Ollama) - Added for Phase 17
+        brain_group = QGroupBox("Local AI (Ollama)")
+        brain_layout = QVBoxLayout(brain_group)
+
+        status_row = QHBoxLayout()
+        self.brain_status_label = QLabel("Brain: Check status...")
+        self.brain_status_label.setStyleSheet(f"color: {get_color('text_secondary')};")
+        status_row.addWidget(self.brain_status_label)
+        
+        self.fix_brain_btn = QPushButton("Fix / Start")
+        self.fix_brain_btn.setFixedWidth(80)
+        self.fix_brain_btn.setVisible(False)
+        self.fix_brain_btn.clicked.connect(self.brain_start_requested.emit)
+        status_row.addWidget(self.fix_brain_btn)
+        brain_layout.addLayout(status_row)
+
+        self.brain_model_label = QLabel("Model: ---")
+        self.brain_model_label.setStyleSheet(f"color: {get_color('text_muted')}; font-size: 11px;")
+        brain_layout.addWidget(self.brain_model_label)
+
+        pull_row = QHBoxLayout()
+        self.pull_input = QComboBox()
+        self.pull_input.setEditable(True)
+        self.pull_input.addItems(["llama2:latest", "llama3", "mistral", "gemma"])
+        self.pull_input.setToolTip("Select or type a model name to pull from Ollama library")
+        pull_row.addWidget(self.pull_input)
+
+        self.pull_btn = QPushButton("Pull")
+        self.pull_btn.setFixedWidth(70)
+        self.pull_btn.clicked.connect(lambda: self.brain_pull_requested.emit(self.pull_input.currentText()))
+        pull_row.addWidget(self.pull_btn)
+        brain_layout.addLayout(pull_row)
+
+        layout.addWidget(brain_group)
         
         # Session Management
         session_group = QGroupBox("Session Management")
         session_layout = QVBoxLayout(session_group)
+
         
         self.reset_btn = QPushButton("🔄 Reset Session")
-        self.reset_btn.setToolTip("Force a session state refresh to resolve location issues (e.g. stuck at Truckee)")
+        self.reset_btn.setToolTip("Force a session state refresh to resolve location issues (e.g. stuck at wrong airport)")
         self.reset_btn.clicked.connect(self.session_reset_requested.emit)
         session_layout.addWidget(self.reset_btn)
         
@@ -198,13 +270,25 @@ class SettingsPanel(QWidget):
         self.mentor_toggled.emit(enabled)
         self.settings_changed.emit()
     
+    def _on_callsign_changed(self, text: str):
+        """Handle callsign override change."""
+        self.callsign_override_changed.emit(text)
+        self.settings_changed.emit()
+        
+    def _on_type_changed(self, text: str):
+        """Handle aircraft type override change."""
+        self.aircraft_type_override_changed.emit(text)
+        self.settings_changed.emit()
+    
     def get_settings(self) -> dict:
         """Get all current settings."""
         return {
             "atc_mode": self.atc_mode_combo.currentText().lower(),
             "cabin_crew_enabled": self.cabin_crew_check.isChecked(),
             "tour_guide_enabled": self.tour_guide_check.isChecked(),
-            "mentor_enabled": self.mentor_check.isChecked()
+            "mentor_enabled": self.mentor_check.isChecked(),
+            "callsign_override": self.callsign_input.text(),
+            "aircraft_type_override": self.type_input.text()
         }
     
     def set_settings(self, settings: dict):
@@ -221,3 +305,28 @@ class SettingsPanel(QWidget):
         
         if "mentor_enabled" in settings:
             self.mentor_check.setChecked(settings["mentor_enabled"])
+            
+        if "callsign_override" in settings:
+            self.callsign_input.setText(settings["callsign_override"])
+            
+        if "aircraft_type_override" in settings:
+            self.type_input.setText(settings["aircraft_type_override"])
+
+    def update_brain_status(self, is_running: bool, current_model: str, available_models: list):
+        """Update the Local AI brain status display."""
+        if is_running:
+            self.brain_status_label.setText("Brain: Online")
+            self.brain_status_label.setStyleSheet(f"color: {get_color('status_connected')};")
+            self.fix_brain_btn.setVisible(False)
+        else:
+            self.brain_status_label.setText("Brain: Offline (Ollama)")
+            self.brain_status_label.setStyleSheet(f"color: {get_color('status_disconnected')};")
+            self.fix_brain_btn.setVisible(True)
+        
+        self.brain_model_label.setText(f"Model: {current_model}")
+        
+        # Update available models if not already in list
+        for model in available_models:
+            if self.pull_input.findText(model) == -1:
+                self.pull_input.addItem(model)
+

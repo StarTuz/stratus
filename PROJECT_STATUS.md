@@ -1,21 +1,13 @@
-# Project Status: Stratus (Offline ATC)
+# Project Status: Stratus ATC
 
-## ✅ Current Status: Offline ATC Operational
+## ✅ Current Status: Local AI ATC Operational
 
-**December 29, 2024** - The Local AI pivot is **complete**. Stratus now functions as a fully offline ATC simulation.
+**January 2, 2025** - Stratus ATC is a fully functional offline ATC simulation using local AI.
 
 ### Architecture: "Brain vs Motor"
 
 - **Stratus (Client)**: **The Brain**. All ATC logic, FAA phraseology, telemetry tracking, and AI prompt construction.
-- **speechserverdaemon (Daemon)**: **The Motor**. Immutable speech engine (D-Bus only, no code changes).
-
-## Completed Features (Dec 29, 2024)
-
-- ✅ **Voice Interaction**: Listen → Think → Speak flow working
-- ✅ **Location Awareness**: ATC responses use X-Plane telemetry (position, altitude, frequency)
-- ✅ **FAA Phraseology**: Responses follow Order 7110.65 format
-- ✅ **D-Bus Integration**: 10-second timeouts with error handling
-- ✅ **Configuration**: llama2 model, Wyoming STT backend
+- **speechserverdaemon (Daemon)**: **The Motor**. Local speech engine (D-Bus interface).
 
 ---
 
@@ -24,20 +16,20 @@
 #### 1. X-Plane Native Plugin (Linux)
 
 - **Status**: Working ✅
-- **Location**: `adapters/xplane/StratusAIml/lin_x64/StratusAIml.xpl`
+- **Location**: `adapters/xplane/StratusATC/lin_x64/StratusATC.xpl`
 - **Features**:
   - Reads all essential DataRefs (position, radios, transponder, autopilot)
-  - Writes telemetry to `~/.local/share/StratusAI/simAPI_input.json` at 1Hz
-  - Own log file (`stratusaiml.log`) - doesn't pollute X-Plane's Log.txt
+  - Writes telemetry to `~/.local/share/StratusATC/simAPI_input.json` at 1Hz
+  - Own log file (`stratus_atc.log`) - doesn't pollute X-Plane's Log.txt
   - Verified working in X-Plane 12.3.3
 
-#### 2. SAPI API Access
+#### 2. Local AI Integration (Ollama)
 
 - **Status**: Working ✅
-- **API Key**: Obtained and tested
-- **Endpoints Verified**:
-  - `getCommsHistory` - Returns audio URLs ✅
-  - Audio files downloadable and valid ✅
+- **Features**:
+  - Ollama status display and service control
+  - Model pulling directly from GUI
+  - 30-second timeouts for cold-starts
 
 #### 3. Build System
 
@@ -46,120 +38,74 @@
 - SDK download script (`setup_sdk.sh`)
 - Fat plugin directory structure
 
-#### 4. Documentation
+#### 4. Qt6 GUI Client
 
-- **Status**: Comprehensive ✅
-- Complete API documentation discovered
-- Architecture defined
-- Implementation roadmap created
+- **Status**: Working ✅
+- Modern dark theme
+- Settings panel with identity overrides
+- ATC communication display
 
----
+#### 5. ComLink Web Interface
 
-### 🚧 Next: Build the Python Client
-
-Now that we've confirmed feasibility, the next phase is building the client:
-
-#### Phase 1: MVP (Text-Only) - ~8 hours
-
-1. SAPI Python module (`sayAs`, `getCommsHistory`)
-2. Audio playback (download + play MP3)
-3. Basic CLI interface
-4. Poll loop for comms history
-
-#### Phase 2: GUI Client - ~12 hours
-
-1. PySide6 main window
-2. Comms history display
-3. Frequency panel
-
-#### Phase 3: Voice Input - ~10 hours
-
-1. Whisper STT integration
-2. PTT hotkey binding
+- **Status**: Working ✅
+- Touch-friendly for tablets/VR
+- Full brain management via web
 
 ---
 
-### ⏸️ Deferred
+### 🚧 Next Steps
 
-| Item | Reason |
-|------|--------|
-| Wine SAPI setup | Native client is better approach |
-| X-Plane Web API integration | Native plugin works fine |
-| MSFS/Proton integration | Lower priority, X-Plane focus first |
+#### Phase 3: Voice Input
+
+- Whisper STT integration
+- PTT hotkey binding
+
+#### Phase 4: Sim Control & Command Execution
+
+- Parse AI responses to control the simulator
+- Set squawk codes, frequencies, autopilot via DataRefs
 
 ---
 
-## Architecture
+## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Stratus Cloud                      │
-│                        (SAPI Server)                         │
-└────────────────────────────▲────────────────────────────────┘
-                             │ API (needs key)
-                             │
-┌────────────────────────────┴────────────────────────────────┐
-│                     Python Client                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │    Audio    │  │     UI      │  │   SimAPI    │          │
-│  │   Handler   │  │  (PySide6)  │  │   Watcher   │          │
-│  └─────────────┘  └─────────────┘  └──────┬──────┘          │
-└────────────────────────────────────────────┼────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         Stratus Client                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│  │    Audio    │  │     UI      │  │   SimAPI    │           │
+│  │   Handler   │  │  (PySide6)  │  │   Watcher   │           │
+│  └─────────────┘  └─────────────┘  └──────┬──────┘           │
+└────────────────────────────────────────────┼─────────────────┘
                                              │ JSON Files
-┌────────────────────────────────────────────┼────────────────┐
-│                                            │                 │
-│   simAPI_input.json ◄──────────────────────┤                 │
-│   simAPI_output.jsonl ─────────────────────►                 │
-│                                                              │
-│                 ~/.local/share/StratusAI/              │
-└────────────────────────────────────────────┬────────────────┘
+┌────────────────────────────────────────────┼─────────────────┐
+│   simAPI_input.json ◄──────────────────────┤                  │
+│   simAPI_output.jsonl ─────────────────────►                  │
+│                  ~/.local/share/StratusATC/                   │
+└────────────────────────────────────────────┬─────────────────┘
                                              │ Read/Write
-┌────────────────────────────────────────────┴────────────────┐
-│                    X-Plane Plugin (C)                        │
-│                   StratusAIml.xpl                      │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │ DataRefs → JSON (1Hz) │ Commands → DataRefs (polling)  │ │
-│  └─────────────────────────────────────────────────────────┘ │
+┌────────────────────────────────────────────┴─────────────────┐
+│                    X-Plane Plugin (C)                         │
+│                      StratusATC.xpl                           │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │ DataRefs → JSON (1Hz) │ Commands → DataRefs (polling)   │  │
+│  └─────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                        X-Plane 12                            │
+│                        X-Plane 12                             │
 └──────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Next Steps
-
-### Immediate (Requires API Key)
-
-1. **Get Stratus API Key** - Needed to develop cloud integration
-2. **Implement SAPI Client** - Audio streaming, command handling
-3. **Complete UI** - Status display, settings management
-
-### When API Key Available
-
-1. Test end-to-end audio communication
-2. Parse and apply incoming commands
-3. Build Linux/macOS packages
-
-### Future Enhancements
-
-1. Implement command processing in plugin
-2. Add Better Pushback integration
-3. Add OpenSAM jetway integration
-4. Investigate X-Plane Web API improvements
 
 ---
 
 ## File Structure
 
 ```
-StratusML/
+Stratus/
 ├── README.md                    # Project overview
-├── ASSESSMENT_AND_ROADMAP.md    # Technical feasibility
+├── ASSESSMENT_AND_ROADMAP.md    # Technical roadmap
 ├── PROJECT_STATUS.md            # This file
 ├── adapters/
 │   └── xplane/
@@ -167,43 +113,46 @@ StratusML/
 │       ├── README.md            # Build instructions
 │       ├── setup_sdk.sh         # SDK download script
 │       ├── src/
-│       │   └── stratus_plugin.c  # Plugin source
-│       ├── SDK/                 # X-Plane SDK (downloaded)
-│       ├── build/               # Build artifacts
-│       └── StratusAIml/   # Built plugin (fat format)
+│       │   └── stratus_plugin.c # Plugin source
+│       └── StratusATC/          # Built plugin (fat format)
 │           └── lin_x64/
-│               └── StratusAIml.xpl  # Linux plugin ✅
+│               └── StratusATC.xpl  # Linux plugin ✅
 ├── client/
 │   ├── requirements.txt
 │   └── src/
-│       ├── main.py              # Entry point (stub)
+│       ├── main.py              # Entry point
 │       ├── core/
-│       │   └── sapi_interface.py  # Mock SAPI service
+│       │   └── providers/       # ATC provider implementations
 │       ├── simapi/
-│       │   └── file_watcher.py   # SimAPI file handler
+│       │   └── file_watcher.py  # SimAPI file handler
 │       └── ui/
-│           └── main_window.py   # PySide6 window (stub)
+│           └── main_window.py   # PySide6 window
 ├── docs/
-│   ├── XPLANE_12_PLATFORM.md    # X-Plane 12 analysis
-│   └── XPLANE_EXTENSIONS.md     # Integration opportunities
+│   ├── ATC_ROADMAP.md           # ATC feature roadmap
+│   ├── ATC_PHRASEOLOGY.md       # FAA phraseology reference
+│   └── VFR_PHRASEOLOGY.md       # VFR communications guide
 └── tests/
-    ├── test_xplane_webapi.py    # Web API test
-    └── test_xplane_websocket.py # WebSocket test
+    └── test_prompt_logic.py     # Prompt regression tests
 ```
 
 ---
 
-## Blockers
+## Test Commands
 
-| Blocker | Impact | Resolution |
-|---------|--------|------------|
-| **No API Key** | Cannot develop cloud communication | Request from Stratus |
-| **No macOS Hardware** | Cannot test macOS build | Find test machine or CI |
+```bash
+# Run the client
+cd /home/startux/Code/Stratus && python client/src/main.py
+
+# Run tests
+cd /home/startux/Code/Stratus && PYTHONPATH=. pytest tests/
+
+# Check X-Plane plugin logs
+tail -f ~/.local/share/StratusATC/stratus_atc.log
+```
 
 ---
 
-## Contacts / Resources
+## Resources
 
-- [Stratus.AI](https://stratus.ai) - Service provider
 - [X-Plane SDK](https://developer.x-plane.com/sdk/) - Plugin development
-- [Stratus Support](https://stratus.freshdesk.com) - Documentation
+- [Ollama](https://ollama.ai/) - Local LLM inference

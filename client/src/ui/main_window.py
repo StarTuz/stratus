@@ -16,9 +16,9 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QMenuBar, QMenu, QStatusBar, QLabel, QApplication, QMessageBox,
-    QSystemTrayIcon, QScrollArea
+    QSystemTrayIcon, QScrollArea, QToolButton
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer, QThread
+from PySide6.QtCore import Qt, Signal, Slot, QTimer, QThread, QSettings
 from PySide6.QtGui import QAction, QIcon, QCloseEvent
 
 # Add parent to path for imports
@@ -28,6 +28,7 @@ from .styles import get_stylesheet, get_color
 from .comms_widget import CommsHistoryWidget
 from .frequency_panel import FrequencyPanel
 from .transmission_panel import TransmissionPanel
+from core.copilot import CoPilot
 from .status_panel import StatusPanel
 from .settings_panel import SettingsPanel
 from .workers import SimpleWorker
@@ -36,8 +37,8 @@ from .system_tray import SystemTray
 from core.providers.factory import get_provider, IATCProvider
 from core.sapi_interface import CommEntry, Channel
 from core.sim_data import SimDataInterface
-from core.copilot import Copilot, CopilotMode, get_copilot
 from core.speech_interface import SpeechInterface
+from core.airport_manager import AirportManager
 from audio import AudioHandler, PlayerState
 
 # Optional: ComLink web server (may not be available if flask not installed)
@@ -75,6 +76,17 @@ class MainWindow(QMainWindow):
         # ATC conversation history for context
         self._atc_history: List[str] = []  # Last N pilot/ATC exchanges
         
+        # Airport Database
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        airports_csv = os.path.join(base_dir, "core", "resources", "airports.csv")
+        runways_csv = os.path.join(base_dir, "core", "resources", "runways.csv")
+        self.airports = AirportManager(airports_csv, runways_csv)
+
+        
+        # Flight State
+        self._last_phase = "UNKNOWN"
+        self._last_alt = 0
+        
         # ComLink web server
         self._enable_web = enable_web and HAS_COMLINK
         self._web_port = web_port
@@ -82,7 +94,13 @@ class MainWindow(QMainWindow):
         self._cached_comms: List[Dict[str, Any]] = []  # For ComLink sync
         
         # Copilot
-        self.copilot = get_copilot()
+        self.copilot = None
+        
+        # Identity Overrides (Phase 24)
+        self._identity_overrides = {
+            "callsign": "",
+            "type": ""
+        }
         
         # Initialize
         self._setup_window()
@@ -92,6 +110,9 @@ class MainWindow(QMainWindow):
         self._setup_comlink()
         self._connect_signals()
         self._init_services()
+        
+        self._init_services()
+        self._load_settings()  # Load persistent settings
         
         logger.info("Main window initialized")
     
@@ -297,6 +318,12 @@ class MainWindow(QMainWindow):
         self.settings_panel.cabin_crew_toggled.connect(self._on_cabin_crew_toggled)
         self.settings_panel.tour_guide_toggled.connect(self._on_tour_guide_toggled)
         self.settings_panel.mentor_toggled.connect(self._on_mentor_toggled)
+        self.settings_panel.brain_start_requested.connect(self._on_brain_start_requested)
+        self.settings_panel.brain_start_requested.connect(self._on_brain_start_requested)
+        self.settings_panel.brain_pull_requested.connect(self._on_brain_pull_requested)
+        self.settings_panel.callsign_override_changed.connect(self._on_callsign_override_changed)
+        self.settings_panel.aircraft_type_override_changed.connect(self._on_type_override_changed)
+
     
     def _setup_tray(self):
         """Initialize system tray."""
@@ -323,6 +350,8 @@ class MainWindow(QMainWindow):
             self.comlink.on_swap_frequency = self._comlink_swap_frequency
             self.comlink.on_play_audio = self._comlink_play_audio
             self.comlink.on_toggle_copilot = self._comlink_toggle_copilot
+            self.comlink.on_brain_start = self._on_brain_start_requested
+            self.comlink.on_brain_pull = self._on_brain_pull_requested
             
             # Start the server
             self.comlink.start()
@@ -400,6 +429,11 @@ class MainWindow(QMainWindow):
         self._telemetry_timer.timeout.connect(self._update_telemetry)
         self._telemetry_timer.start(500)  # 500ms for responsiveness
 
+        # Brain status monitoring (every 5 seconds)
+        self._brain_timer = QTimer(self)
+        self._brain_timer.timeout.connect(self._update_brain_status)
+        self._brain_timer.start(5000)
+
         
         # Disable transmission until connected
         self.transmission_panel.set_enabled(False)
@@ -459,7 +493,6 @@ class MainWindow(QMainWindow):
         """Stop and clean up the PTT timer."""
         if hasattr(self, '_ptt_timer') and self._ptt_timer:
             self._ptt_timer.stop()
-            self._ptt_timer = None
         self.transmission_panel.set_transmitting_state(False)
         
     def _on_stt_result(self, text):
@@ -467,6 +500,17 @@ class MainWindow(QMainWindow):
         self._stop_ptt_timer()
         self._stt_worker = None
         
+        self._process_queue = []
+        self._is_processing = False
+        
+        # Identity Overrides (Phase 24)
+        self._identity_overrides = {
+            "callsign": "",
+            "type": "" # unused but good for structure
+        }
+        self.sapi = None
+        
+        # Initialize UItranscribed text
         if text:
             # Send the transcribed text
             channel = self.transmission_panel._current_channel
@@ -485,61 +529,30 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Voice Input Error: {error}")
     
     def _init_copilot(self):
-        """Initialize copilot with callbacks."""
-        # Set up copilot actions
-        self.copilot.on_frequency_change = self._copilot_tune_frequency
-        self.copilot.on_squawk_change = self._copilot_set_squawk
-        self.copilot.on_instruction_detected = self._copilot_instruction
+        """Initialize copilot."""
+        # Initialize the new AI Co-pilot action layer
+        self.copilot = CoPilot(self.sim_data)
         
         # Connect transmission panel copilot toggle
         self.transmission_panel.copilot_toggled.connect(self._on_copilot_toggled)
         
-        logger.info("Copilot initialized")
+        logger.info("Co-pilot initialized")
     
-    def _copilot_tune_frequency(self, frequency: str, channel: str):
-        """Copilot auto-tunes a frequency."""
-        logger.info(f"Copilot tuning {channel} to {frequency}")
-        if channel == "COM1":
-            self.sim_data.set_com1_standby(frequency)
-            self.sim_data.swap_com1()  # Swap to make it active
-        else:
-            self.sim_data.set_com2_standby(frequency)
-            self.sim_data.swap_com2()
-        
-        # Update status
-        self.status_bar.showMessage(f"🤖 Copilot tuned {channel} to {frequency}")
-        
-        # Also update ComLink
-        if self.comlink:
-            self.comlink.send_toast(f"Copilot tuned {frequency}", "success")
-    
-    def _copilot_set_squawk(self, code: str):
-        """Copilot sets transponder code."""
-        logger.info(f"Copilot setting squawk to {code}")
-        self.sim_data.set_transponder_code(code)
-        self.status_bar.showMessage(f"🤖 Copilot set squawk {code}")
-        
-        if self.comlink:
-            self.comlink.send_toast(f"Copilot set squawk {code}", "success")
-    
-    def _copilot_instruction(self, description: str):
-        """Called when copilot detects an instruction."""
-        logger.info(f"Copilot instruction: {description}")
-        # Could show in a dedicated copilot status area
     
     @Slot(bool)
     def _on_copilot_toggled(self, enabled: bool):
         """Handle copilot toggle from UI."""
-        if enabled:
-            self.copilot.enable(CopilotMode.FULL)
-            self.status_bar.showMessage("🤖 Copilot enabled - handling ATC communications")
-            if self.comlink:
-                self.comlink.send_toast("Copilot enabled", "success")
-        else:
-            self.copilot.disable()
-            self.status_bar.showMessage("Copilot disabled")
-            if self.comlink:
-                self.comlink.send_toast("Copilot disabled", "info")
+        if self.copilot:
+            self.copilot.set_enabled(enabled)
+            
+            if enabled:
+                self.status_bar.showMessage("🤖 AI Co-pilot enabled - Automation Active")
+                if self.comlink:
+                    self.comlink.send_toast("Co-pilot enabled", "success")
+            else:
+                self.status_bar.showMessage("AI Co-pilot disabled")
+                if self.comlink:
+                    self.comlink.send_toast("Co-pilot disabled", "info")
     
     def _run_in_background(self, func, on_result=None, on_error=None):
         """
@@ -874,43 +887,7 @@ class MainWindow(QMainWindow):
         callsign = telemetry.tail_number if telemetry.connected else "November-One-Two-Three-Alpha-Bravo"
         frequency = telemetry.com1.active if channel == "COM1" else telemetry.com2.active
         
-        # Build location context
-        if telemetry.connected:
-            lat = telemetry.latitude
-            lon = telemetry.longitude
-            alt = int(telemetry.altitude_msl)
-            on_ground = telemetry.on_ground
-            heading = int(telemetry.heading_mag)
-            speed = int(telemetry.ias)
-            
-            # Determine likely ATC facility type based on flight phase
-            if on_ground:
-                facility_hint = "Ground Control or Tower"
-            elif alt < 3000:
-                facility_hint = "Tower or Approach Control"
-            elif alt < 18000:
-                facility_hint = "Approach/Departure Control or Center"
-            else:
-                facility_hint = "Air Route Traffic Control Center (Center)"
-            
-            location_context = f"""
-AIRCRAFT SITUATION:
-- Aircraft: {callsign} (Type: {telemetry.icao_type})
-- Position: {lat:.4f}°N, {abs(lon):.4f}°{'W' if lon < 0 else 'E'}
-- Altitude: {alt} feet MSL
-- Heading: {heading}°
-- Speed: {speed} knots
-- On Ground: {'Yes' if on_ground else 'No'}
-- Radio Frequency: {frequency} MHz
-
-You are Air Traffic Control at the facility responsible for this aircraft's location.
-Likely facility type: {facility_hint}
-"""
-        else:
-            location_context = """
-AIRCRAFT SITUATION: Simulator disconnected - no position data available.
-You are a generic Air Traffic Controller.
-"""
+        # NOTE: Logic extracted to build_atc_prompt static method for testability
         
         def do_atc_flow():
             """This runs in background thread: Think -> Speak."""
@@ -920,42 +897,15 @@ You are a generic Air Traffic Controller.
             else:
                 history_context = "(This is the first transmission - no prior context)"
             
-            # Build location-aware ATC prompt with FAA-accurate phraseology
-            atc_prompt = f"""{location_context}
-
-
-FAA ATC TRANSMISSION FORMAT:
-Format: "[Aircraft Callsign], [Facility], [Message]"
-
-EXAMPLES OF CORRECT ATC RESPONSES:
-- Radio check: "Cessna Three Alpha Bravo, Tower, readability five"
-- Taxi clearance: "Cessna Three Alpha Bravo, Ground, runway two seven, taxi via Alpha, hold short of runway two seven"
-- Run-up complete: "Cessna Three Alpha Bravo, hold short runway two seven, number two for departure"
-- Takeoff: "Cessna Three Alpha Bravo, wind two seven zero at one zero, runway two seven, cleared for takeoff"
-- VFR Flight Following: "Cessna Three Alpha Bravo, radar contact, three miles east of the field, VFR flight following to Sacramento, squawk one two zero zero, maintain VFR"
-- VFR traffic advisory: "Cessna Three Alpha Bravo, traffic eleven o'clock, five miles, westbound, altitude indicates four thousand five hundred"
-- Frequency change: "Cessna Three Alpha Bravo, contact NorCal Approach on one two four point five"
-- Landing: "Cessna Three Alpha Bravo, runway two seven, cleared to land, wind two five zero at eight"
-
-CRITICAL RULES:
-1. Start with aircraft callsign, then facility suffix (Ground, Tower, Approach, Center)
-2. NEVER say "This is" - just the facility suffix directly  
-3. Taxi clearances ALWAYS end with "hold short of runway [XX]"
-4. Numbers: "niner" for 9, "two seven zero" for 270, "point" for decimal
-5. Be extremely brief - real ATC is terse
-6. Track the flight: if pilot requests flight following, acknowledge with squawk code and destination
-7. RADIO CHECK: Always respond with READABILITY (1-5 scale). Say "readability five" NOT "radio check"
-
-
-CONVERSATION CONTEXT:
-{history_context}
-
-The pilot now transmitted: "{message}"
-
-Respond as ATC. Give ONLY the radio transmission, no explanations."""
-
-
-
+            # Use shared method to build prompt
+            atc_prompt = self.build_atc_prompt(
+                telemetry, 
+                self.airports, 
+                self._update_flight_phase(telemetry), 
+                history_context, 
+                message,
+                overrides=self._identity_overrides
+            )
 
             # Get AI response
             think_result = self.sapi.think(atc_prompt)
@@ -1018,6 +968,14 @@ Respond as ATC. Give ONLY the radio transmission, no explanations."""
                 self.comms_widget.add_message(atc_msg)
                 
                 self.status_message.emit(f"ATC: {response.data[:60]}...")
+                
+                # Phase 22: Co-pilot Action Loop
+                # Pass the response to the co-pilot to check for actionable commands
+                actions = self.copilot.process_atc_instruction(str(response.data))
+                if actions:
+                    logger.info(f"Co-pilot executed: {actions}")
+                    self.status_message.emit(f"Co-pilot: {', '.join(actions)}")
+                
                 if self.comlink:
                     self.comlink.send_toast("ATC responded", "success")
 
@@ -1035,8 +993,38 @@ Respond as ATC. Give ONLY the radio transmission, no explanations."""
 
 
     
+    def _update_flight_phase(self, telemetry) -> str:
+        """Update and return the current flight phase based on telemetry."""
+        if not telemetry or not telemetry.connected:
+            return "UNKNOWN"
+            
+        phase = "CRUISE"
+        if telemetry.on_ground:
+            if telemetry.ias < 40:
+                phase = "TAXI/PARKED"
+            else:
+                phase = "TAKEOFF ROLL"
+        else:
+            # Simple climb/descent detection
+            if telemetry.vertical_speed > 300:
+                phase = "CLIMB"
+            elif telemetry.vertical_speed < -300:
+                phase = "DESCENT"
+            
+            # Close to ground and descending
+            if telemetry.altitude_agl < 2000 and telemetry.vertical_speed < -100:
+                phase = "APPROACH/LANDING"
+        
+        # Override for high altitude
+        if telemetry.altitude_msl > 18000:
+            phase = f"EN ROUTE ({phase})"
+            
+        self._last_phase = phase
+        return phase
+
     @Slot(str, str)
     def _on_tune_frequency(self, channel: str, freq: str):
+
         """Handle frequency tune request - runs in background."""
         if not self.sapi or not self.sapi.is_connected:
             return
@@ -1253,6 +1241,7 @@ Respond as ATC. Give ONLY the radio transmission, no explanations."""
             return
         
         # Actually closing - clean up
+        self._save_settings()  # Save persistent settings
         self._stop_polling()
         
         # Wait for workers to finish
@@ -1341,11 +1330,21 @@ Respond as ATC. Give ONLY the radio transmission, no explanations."""
             return
             
         telemetry = self.sim_data.read_telemetry()
-        icao = telemetry.icao_type if telemetry and telemetry.icao_type else "F70"
+        # Use logic similar to prompt builder for consistency
+        override_type = self._identity_overrides.get("type", "")
+        icao = override_type if override_type else (telemetry.icao_type if telemetry and telemetry.icao_type else "F70")
         
         self.status_bar.showMessage(f"Resetting session for {icao}...")
         
         def do_reset():
+            # If local provider, clear the brain context too
+            if hasattr(self.sapi, 'manage_brain'):
+                try:
+                    self.sapi.manage_brain("clear")
+                    logger.info("Cleared local AI brain context")
+                except Exception as e:
+                    logger.error(f"Failed to clear brain context: {e}")
+            
             return self.sapi.reset_session(icao)
             
         def on_result(response):
@@ -1358,6 +1357,273 @@ Respond as ATC. Give ONLY the radio transmission, no explanations."""
                 self.status_bar.showMessage(f"Reset failed: {response.error}")
                 
         self._run_in_background(do_reset, on_result)
+
+    def _update_brain_status(self):
+        """Poll and update local AI brain status if using local provider."""
+        if not self.sapi or not hasattr(self.sapi, 'get_brain_status'):
+            return
+
+        def do_check():
+            return self.sapi.get_brain_status()
+
+        def on_result(status):
+            is_running, current_model, available = status
+            self.settings_panel.update_brain_status(is_running, current_model, available)
+            if self.comlink:
+                self.comlink.update_brain_status(is_running, current_model, available)
+
+        self._run_in_background(do_check, on_result)
+
+    @Slot()
+    def _on_brain_start_requested(self):
+        """Handle request to start local AI brain."""
+        if not self.sapi or not hasattr(self.sapi, 'manage_brain'):
+            return
+
+        self.status_bar.showMessage("Starting local AI brain (Ollama)...")
+        
+        def do_start():
+            return self.sapi.manage_brain("start")
+
+        def on_result(success):
+            if success:
+                self.status_bar.showMessage("Brain mission started successfully")
+            else:
+                self.status_bar.showMessage("Failed to start brain. Check systemd status.")
+
+        self._run_in_background(do_start, on_result)
+
+        self._run_in_background(do_start, on_result)
+
+    @Slot(str)
+    def _on_callsign_override_changed(self, text: str):
+        """Update callsign override."""
+        self._identity_overrides["callsign"] = text.strip()
+        logger.info(f"Callsign override: '{text}'")
+        
+    @Slot(str)
+    def _on_type_override_changed(self, text: str):
+        """Update aircraft type override."""
+        self._identity_overrides["type"] = text.strip()
+        logger.info(f"Aircraft Type override: '{text}'")
+
+    @staticmethod
+    def build_atc_prompt(telemetry, airports, flight_phase, history_context, message, overrides=None):
+        """
+        Build the ATC system prompt with dynamic location context.
+        Static method for easier testing.
+        overrides: dict with 'callsign' and 'type' keys
+        """
+        if overrides is None:
+            overrides = {}
+            
+        # Determine Callsign: Manual Override > Telemetry Connected > Fallback
+        manual_callsign = overrides.get("callsign", "")
+        if manual_callsign:
+             callsign = manual_callsign
+        else:
+             callsign = telemetry.tail_number if telemetry.connected else "November-One-Two-Three-Alpha-Bravo"
+
+        # Determine Type (used in location context)
+        manual_type = overrides.get("type", "")
+        icao_type = manual_type if manual_type else telemetry.icao_type
+
+        frequency = telemetry.com1.active
+        
+        # Default facility name
+        facility_name = "Generic"
+
+        # Build location context
+        if telemetry.connected:
+            lat = telemetry.latitude
+            lon = telemetry.longitude
+            alt = int(telemetry.altitude_msl)
+            on_ground = telemetry.on_ground
+            heading = int(telemetry.heading_mag)
+            speed = int(telemetry.ias)
+            
+            # Determine likely ATC facility type based on flight phase
+            if on_ground:
+                facility_hint = "Ground Control or Tower"
+            elif alt < 3000:
+                facility_hint = "Tower or Approach Control"
+            elif alt < 18000:
+                facility_hint = "Approach/Departure Control or Center"
+            else:
+                facility_hint = "Air Route Traffic Control Center (Center)"
+            
+            # Phase 2: Airport awareness
+            # Look up nearest airport using providing airports service
+            nearest_apt = airports.find_nearest(lat, lon)
+            if nearest_apt:
+                raw_name = nearest_apt.name.replace(" Airport", "").replace(" Intl", "").replace(" International", "")
+                facility_name = raw_name
+            else:
+                facility_name = "Local"
+            
+            location_context = f"""
+AIRCRAFT SITUATION:
+- Aircraft: {callsign} (Type: {icao_type})
+- Flight Phase: {flight_phase}
+- Position: {lat:.4f}°N, {abs(lon):.4f}°{'W' if lon < 0 else 'E'}
+- Nearest Facility: {facility_name} ({nearest_apt.icao if nearest_apt else 'Unknown'})
+- Altitude: {alt} feet MSL
+- Heading: {heading}°
+- Speed: {speed} knots
+- On Ground: {'Yes' if on_ground else 'No'}
+- Radio Frequency: {frequency} MHz
+
+You are Air Traffic Control at {facility_name}.
+Facility type: {facility_hint}
+"""
+        else:
+            location_context = f"""
+AIRCRAFT SITUATION: Simulator disconnected - no position data available.
+Aircraft: {callsign}
+You are a generic Air Traffic Controller.
+"""
+
+        # Build location-aware ATC prompt with FAA-accurate phraseology
+        # Uses dynamic facility name AND callsign in examples to prevent hallucination
+        atc_prompt = f"""{location_context}
+
+
+FAA ATC TRANSMISSION FORMAT:
+Format: "[Aircraft Callsign], [Facility], [Message]"
+
+OFFICIAL FAA VFR PHRASEOLOGY EXAMPLES (using YOUR callsign {callsign}):
+
+1. INITIAL CONTACT (Cold Call):
+Pilot: "{facility_name}, {callsign}, VFR request."
+ATC: "{callsign}, {facility_name}, go ahead."
+
+2. FLIGHT FOLLOWING REQUEST:
+Pilot: "{callsign} is type {icao_type}, 5 miles south of {facility_name}, 4,500, request flight following to Sacramento."
+ATC: "{callsign}, squawk 4521, ident."
+(NOTE: Assign a unique 4-digit squawk code. Do NOT give altimeter yet.)
+
+3. RADAR CONTACT:
+ATC: "{callsign}, radar contact, 5 miles south of {facility_name}. Altimeter 29.92."
+
+4. SERVICE TERMINATION (Cancel Flight Following):
+Pilot: "{callsign}, field in sight, cancel flight following."
+ATC: "{callsign}, radar service terminated, squawk VFR, frequency change approved."
+
+5. TRAFFIC ADVISORY:
+ATC: "{callsign}, traffic 12 o'clock, 3 miles, northbound, altitude indicates 3,500."
+
+6. RADIO CHECK (Only if asked):
+Pilot: "Radio check."
+ATC: "{callsign}, readability five."
+
+CRITICAL RULES:
+1. ALWAYS use the EXACT callsign "{callsign}" - never substitute a different callsign
+2. Start with aircraft callsign, then facility suffix (Ground, Tower, Approach, Center)
+3. NEVER say "This is" - just the facility suffix directly  
+4. Taxi clearances ALWAYS end with "hold short of runway [XX]"
+5. Numbers: "niner" for 9, "two seven zero" for 270, "point" for decimal
+6. Be extremely brief - real ATC is terse
+7. Track the flight: if pilot requests flight following, acknowledge with squawk code and destination
+
+
+CONVERSATION CONTEXT:
+{history_context}
+
+The pilot now transmitted: "{message}"
+
+Respond as ATC. Give ONLY the radio transmission, no explanations."""
+        
+        return atc_prompt
+
+    @Slot(str)
+    def _on_brain_pull_requested(self, model_name: str):
+        """Handle request to pull/download a model."""
+        if not self.sapi:
+            return
+            
+        def do_pull():
+            # ... existing ...
+            pass # (logic is inside methods usually, just placeholder context)
+    
+    @Slot(bool)
+    def _toggle_copilot(self, checked: bool):
+        """Enable/Disable Co-pilot automation."""
+        if self.copilot:
+            self.copilot.set_enabled(checked)
+            state = "enabled" if checked else "disabled"
+            self.status_bar.showMessage(f"AI Co-pilot {state}")
+
+    # =========================================================================
+    # Brain Management Signals
+    # =========================================================================
+        """Handle request to pull/download a model."""
+        if not self.sapi or not hasattr(self.sapi, 'manage_brain'):
+            return
+
+        self.status_bar.showMessage(f"Downloading model '{model_name}'... This may take a while.")
+        
+        def do_pull():
+            return self.sapi.manage_brain("pull", model_name)
+
+        def on_result(success):
+            if success:
+                self.status_bar.showMessage(f"Model '{model_name}' downloaded!")
+            else:
+                self.status_bar.showMessage(f"Failed to pull model '{model_name}'.")
+
+        self._run_in_background(do_pull, on_result)
+
+    # =========================================================================
+    # Settings Persistence (Phase 24)
+    # =========================================================================
+    
+    def _load_settings(self):
+        """Load settings from QSettings."""
+        settings = QSettings("StratusAI", "NativeClient")
+        
+        # Geometry
+        if settings.value("geometry"):
+            self.restoreGeometry(settings.value("geometry"))
+        if settings.value("windowState"):
+            self.restoreState(settings.value("windowState"))
+            
+        # Preferences
+        settings_dict = {
+            "atc_mode": settings.value("atcMode", "Standard"),
+            "cabin_crew_enabled": settings.value("cabinCrew", False, type=bool),
+            "tour_guide_enabled": settings.value("tourGuide", False, type=bool),
+            "mentor_enabled": settings.value("mentor", False, type=bool),
+            "callsign_override": settings.value("callsignOverride", ""),
+            "aircraft_type_override": settings.value("aircraftTypeOverride", "")
+        }
+        
+        # Apply to Settings Panel
+        self.settings_panel.set_settings(settings_dict)
+        
+        # Apply to Identity Overrides immediately
+        self._identity_overrides["callsign"] = settings_dict["callsign_override"]
+        self._identity_overrides["type"] = settings_dict["aircraft_type_override"]
+        
+        logger.info("Settings loaded")
+
+    def _save_settings(self):
+        """Save settings to QSettings."""
+        settings = QSettings("StratusAI", "NativeClient")
+        
+        # Geometry
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+        
+        # Preferences
+        current = self.settings_panel.get_settings()
+        settings.setValue("atcMode", current["atc_mode"])
+        settings.setValue("cabinCrew", current["cabin_crew_enabled"])
+        settings.setValue("tourGuide", current["tour_guide_enabled"])
+        settings.setValue("mentor", current["mentor_enabled"])
+        settings.setValue("callsignOverride", current["callsign_override"])
+        settings.setValue("aircraftTypeOverride", current["aircraft_type_override"])
+        
+        logger.info("Settings saved")
 
 
 def run_gui(enable_web: bool = True, web_port: int = 8080):

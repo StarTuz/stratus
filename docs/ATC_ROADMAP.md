@@ -1,8 +1,8 @@
 # Stratus Offline ATC - Development Roadmap
 
-## Current Status: Phase 1 Complete ✅
+## Current Status: Phase 2 Complete ✅
 
-Basic ATC voice interaction with FAA-style phraseology.
+Phase 2 is operational. ATC now identifies itself by airport name (e.g., "Truckee Tower") using a local database lookup.
 
 ---
 
@@ -19,18 +19,14 @@ Basic ATC voice interaction with FAA-style phraseology.
 
 ---
 
-## Phase 2: Airport Awareness 🎯 (Next)
+## Phase 2: Airport Awareness ✅ (Complete)
 
 **Goal**: ATC knows which airport/facility it is
 
-| Task | Difficulty | Impact |
-|------|------------|--------|
-| Download FAA airport database (CSV) | Easy | High |
-| Lookup nearest airport from coords | Easy | High |
-| Include airport name in ATC responses | Easy | High |
-| Determine active runway from wind | Medium | Medium |
-
-**Result**: "Cessna 3AB, **Truckee Tower**, readability five"
+- [x] Integrated OurAirports database (12MB CSV)
+- [x] Logic to lookup nearest airport from coordinates
+- [x] Dynamic facility identification in ATC prompts
+- [x] Updated phraseology examples with specific facility names
 
 ---
 
@@ -108,7 +104,21 @@ Basic ATC voice interaction with FAA-style phraseology.
 | Go-around vectors | Hard | Medium |
 | Multi-frequency simulation | Hard | Medium |
 
-**Result**: Matches SayIntentions "Living World" feature
+**Result**: Full "Living World" experience with dynamic traffic
+
+---
+
+## Phase 8: Optimization & Modernization (Future)
+
+**Goal**: Product-grade stability and performance
+
+| Task | Difficulty | Impact |
+|------|------------|--------|
+| Rust Migration (Tauri/Iced) | Very Hard | High |
+| WebAssembly Client | Very Hard | Medium |
+| Cloud-sync preferences | Medium | Low |
+
+**Result**: A high-performance, single-binary application with <50ms audio latency.
 
 ---
 

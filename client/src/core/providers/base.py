@@ -44,7 +44,7 @@ class ATCResponse:
 class IATCProvider(ABC):
     """
     Abstract interface for ATC/Speech providers.
-    Supports both Local (SpeechD-NG) and Cloud (SayIntentions).
+    Currently uses Local provider (SpeechD-NG + Ollama).
     """
 
     @abstractmethod

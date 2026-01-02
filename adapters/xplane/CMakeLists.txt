@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(SayIntentionsAIml VERSION 0.1.0 LANGUAGES C)
+project(StratusATC VERSION 0.2.0 LANGUAGES C)
 
 # ============================================================================
 # X-Plane SDK Configuration
@@ -46,19 +46,19 @@ message(STATUS "Building for: ${XPLANE_PLATFORM}_${XPLANE_ARCH}")
 # ============================================================================
 # Plugin Target
 # ============================================================================
-add_library(sayintentions_plugin SHARED
-    src/sayintentions_plugin.c
+add_library(stratus_plugin SHARED
+    src/stratus_plugin.c
 )
 
 # Include SDK headers
-target_include_directories(sayintentions_plugin PRIVATE
+target_include_directories(stratus_plugin PRIVATE
     ${XPLANE_SDK_PATH}/CHeaders/XPLM
     ${XPLANE_SDK_PATH}/CHeaders/Widgets
     ${XPLANE_SDK_PATH}/CHeaders/Wrappers
 )
 
 # Platform defines
-target_compile_definitions(sayintentions_plugin PRIVATE
+target_compile_definitions(stratus_plugin PRIVATE
     ${XPLANE_PLATFORM_DEFINE}
 )
 
@@ -67,12 +67,12 @@ target_compile_definitions(sayintentions_plugin PRIVATE
 # ============================================================================
 if(WIN32)
     # Windows: Link against XPLM_64.lib
-    target_link_libraries(sayintentions_plugin PRIVATE
+    target_link_libraries(stratus_plugin PRIVATE
         ${XPLANE_SDK_PATH}/Libraries/Win/XPLM_64.lib
     )
-    # Output name: SayIntentionsAIml.xpl
-    set_target_properties(sayintentions_plugin PROPERTIES
-        OUTPUT_NAME "SayIntentionsAIml"
+    # Output name: StratusATC.xpl
+    set_target_properties(stratus_plugin PROPERTIES
+        OUTPUT_NAME "StratusATC"
         SUFFIX ".xpl"
         PREFIX ""
     )
@@ -80,12 +80,12 @@ if(WIN32)
 elseif(APPLE)
     # macOS: Link against XPLM.framework
     find_library(XPLM_FRAMEWORK XPLM PATHS ${XPLANE_SDK_PATH}/Libraries/Mac)
-    target_link_libraries(sayintentions_plugin PRIVATE
+    target_link_libraries(stratus_plugin PRIVATE
         ${XPLM_FRAMEWORK}
         "-framework CoreFoundation"
     )
-    set_target_properties(sayintentions_plugin PROPERTIES
-        OUTPUT_NAME "SayIntentionsAIml"
+    set_target_properties(stratus_plugin PROPERTIES
+        OUTPUT_NAME "StratusATC"
         SUFFIX ".xpl"
         PREFIX ""
         BUNDLE FALSE
@@ -93,19 +93,19 @@ elseif(APPLE)
 
 else()
     # Linux: No link libraries, use linker flags
-    target_link_options(sayintentions_plugin PRIVATE
+    target_link_options(stratus_plugin PRIVATE
         -shared
         -rdynamic
         -nodefaultlibs
         -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.txt
     )
     # Link standard C library
-    target_link_libraries(sayintentions_plugin PRIVATE
+    target_link_libraries(stratus_plugin PRIVATE
         c
         m
     )
-    set_target_properties(sayintentions_plugin PROPERTIES
-        OUTPUT_NAME "SayIntentionsAIml"
+    set_target_properties(stratus_plugin PROPERTIES
+        OUTPUT_NAME "StratusATC"
         SUFFIX ".xpl"
         PREFIX ""
     )
@@ -114,13 +114,13 @@ endif()
 # ============================================================================
 # Output Directory Structure (Fat Plugin 3.0 format)
 # ============================================================================
-# Creates: SayIntentionsAIml/lin_x64/SayIntentionsAIml.xpl
-#          SayIntentionsAIml/mac_x64/SayIntentionsAIml.xpl
-#          SayIntentionsAIml/win_x64/SayIntentionsAIml.xpl
+# Creates: StratusATC/lin_x64/StratusATC.xpl
+#          StratusATC/mac_x64/StratusATC.xpl
+#          StratusATC/win_x64/StratusATC.xpl
 
-set(PLUGIN_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/SayIntentionsAIml/${XPLANE_PLATFORM}_${XPLANE_ARCH}")
+set(PLUGIN_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/StratusATC/${XPLANE_PLATFORM}_${XPLANE_ARCH}")
 
-set_target_properties(sayintentions_plugin PROPERTIES
+set_target_properties(stratus_plugin PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${PLUGIN_OUTPUT_DIR}"
 )
@@ -132,7 +132,7 @@ set_target_properties(sayintentions_plugin PROPERTIES
 # cmake -DXPLANE_PLUGIN_DIR=/path/to/X-Plane/Resources/plugins ..
 
 if(DEFINED XPLANE_PLUGIN_DIR)
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/SayIntentionsAI"
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/StratusATC"
             DESTINATION "${XPLANE_PLUGIN_DIR}"
             FILES_MATCHING PATTERN "*.xpl")
 endif()

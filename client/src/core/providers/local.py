@@ -1,3 +1,4 @@
+from typing import Tuple, List, Optional, Any
 from .base import IATCProvider, ATCResponse
 from ..sim_data import SimDataInterface
 import dbus
@@ -163,3 +164,25 @@ class LocalSpeechProvider(IATCProvider):
         """
         # Map COM1/COM2 to left/right if desired, or just use default
         return self.say(text)
+
+    # --- Brain Management ---
+    
+    def get_brain_status(self) -> Tuple[bool, str, List[str]]:
+        """Get status of the local AI brain."""
+        if not self.connected:
+            return False, "Disconnected", []
+        try:
+            is_running, model, available = self.proxy.GetBrainStatus(dbus_interface=self.INTERFACE)
+            return bool(is_running), str(model), [str(m) for m in available]
+        except Exception:
+            return False, "Error", []
+
+    def manage_brain(self, action: str, param: str = "") -> bool:
+        """Perform action on local AI brain (start, stop, pull)."""
+        if not self.connected:
+            return False
+        try:
+            return bool(self.proxy.ManageBrain(action, param, dbus_interface=self.INTERFACE))
+        except Exception:
+            return False
+

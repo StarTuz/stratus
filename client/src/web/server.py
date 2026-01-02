@@ -591,6 +591,53 @@ COMLINK_HTML = """
             to { transform: rotate(360deg); }
         }
         
+        /* Brain Section */
+        .brain-section {
+            margin-top: 20px;
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid var(--border-light);
+        }
+        
+        .brain-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .brain-model-info {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        
+        .fix-btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            background: var(--accent-red);
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .fix-btn:hover {
+            box-shadow: 0 0 15px rgba(255, 71, 71, 0.4);
+        }
+        
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge.online { background: rgba(0, 210, 106, 0.2); color: var(--accent-green); }
+        .badge.offline { background: rgba(255, 71, 71, 0.2); color: var(--accent-red); }
+        
         /* Footer */
         .footer {
             text-align: center;
@@ -636,14 +683,19 @@ COMLINK_HTML = """
                 </div>
             </div>
             
-            <div class="radio-card xpdr-card">
-                <div class="radio-label">Transponder</div>
-                <div class="xpdr-row">
-                    <span class="xpdr-code" id="xpdr-code">1200</span>
-                    <span class="xpdr-mode" id="xpdr-mode">STBY</span>
-                </div>
-            </div>
         </div>
+        
+        <!-- Brain Management (Local AI) -->
+        <section id="brain-section" class="brain-section" style="display: none;">
+            <div class="section-header">
+                <span class="section-title">🧠 Local AI Brain</span>
+                <span id="brain-status-badge" class="badge">---</span>
+            </div>
+            <div class="brain-controls">
+                <div id="brain-model-info" class="brain-model-info">Model: ---</div>
+                <button id="brain-fix-btn" class="fix-btn" onclick="startBrain()" style="display: none;">Fix / Start</button>
+            </div>
+        </section>
         
         <!-- Communications History -->
         <section class="comms-section">
@@ -740,6 +792,36 @@ COMLINK_HTML = """
             if (state.copilot !== undefined) {
                 updateCopilotStatus(state.copilot.enabled);
             }
+            if (state.brain) {
+                updateBrainStatus(state.brain);
+            }
+        }
+        
+        // Update Brain Status
+        function updateBrainStatus(brain) {
+            const section = document.getElementById('brain-section');
+            const badge = document.getElementById('brain-status-badge');
+            const info = document.getElementById('brain-model-info');
+            const fixBtn = document.getElementById('brain-fix-btn');
+            
+            section.style.display = 'block';
+            
+            if (brain.is_running) {
+                badge.textContent = 'ONLINE';
+                badge.className = 'badge online';
+                fixBtn.style.display = 'none';
+            } else {
+                badge.textContent = 'OFFLINE';
+                badge.className = 'badge offline';
+                fixBtn.style.display = 'block';
+            }
+            
+            info.textContent = `Model: ${brain.current_model || '---'}`;
+        }
+        
+        function startBrain() {
+            socket.emit('start_brain');
+            showToast('Requesting brain start...');
         }
         
         // Update connection status
@@ -968,13 +1050,20 @@ class ComLinkServer:
         self.on_swap_frequency: Optional[Callable[[str], None]] = None
         self.on_play_audio: Optional[Callable[[str], None]] = None
         self.on_toggle_copilot: Optional[Callable[[bool], None]] = None
+        self.on_brain_start: Optional[Callable[[], None]] = None
+        self.on_brain_pull: Optional[Callable[[str], None]] = None
         
         # State cache
         self._state = {
             "sapi_connected": False,
             "status_text": "Disconnected",
             "telemetry": None,
-            "comms": []
+            "comms": [],
+            "brain": {
+                "is_running": False,
+                "current_model": "---",
+                "available_models": []
+            }
         }
         
         # Create Flask app
@@ -1076,9 +1165,21 @@ class ComLinkServer:
             logger.info(f"WebSocket: toggle_copilot -> {enabled}")
             if self.on_toggle_copilot:
                 self.on_toggle_copilot(enabled)
-            # Broadcast updated copilot state
             self._state["copilot"] = {"enabled": enabled}
             self._broadcast_state()
+
+        @self.socketio.on('start_brain')
+        def handle_start_brain():
+            logger.info("WebSocket: start_brain requested")
+            if self.on_brain_start:
+                self.on_brain_start()
+
+        @self.socketio.on('pull_model')
+        def handle_pull_model(data):
+            model = data.get('model', '')
+            logger.info(f"WebSocket: pull_model requested: {model}")
+            if self.on_brain_pull:
+                self.on_brain_pull(model)
     
     # =========================================================================
     # State Update Methods (called by main app)
@@ -1099,6 +1200,15 @@ class ComLinkServer:
         """Update communications history."""
         self._state["comms"] = comms
         self.socketio.emit('comms_update', {"comms": comms})
+    
+    def update_brain_status(self, is_running: bool, current_model: str, available_models: List[str]):
+        """Update brain status info."""
+        self._state["brain"] = {
+            "is_running": is_running,
+            "current_model": current_model,
+            "available_models": available_models
+        }
+        self._broadcast_state()
     
     def _broadcast_state(self):
         """Broadcast full state to all connected clients."""
