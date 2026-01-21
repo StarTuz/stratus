@@ -10,7 +10,7 @@ use dbus_tree::{Factory, MTFn, MethodErr, MethodInfo};
 use log::{error, info, warn};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+
 use whisper_integration::WhisperTranscriber;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .add_m(f.method(
                         "StartListening",
                         (),
-                        move |ctx: &MethodInfo<MTFn<()>, ()>| {
+                        move |_ctx: &MethodInfo<MTFn<()>, ()>| {
                             info!("Received StartListening signal");
                             match audio_clone_start.start_capture() {
                                 Ok(_) => {

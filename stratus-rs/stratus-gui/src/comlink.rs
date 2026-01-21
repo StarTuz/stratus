@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! ComLink - Embedded Web Server
 //!
 //! Serves the ComLink web interface for tablet/VR access.
@@ -47,11 +48,11 @@ async fn telemetry_handler() -> &'static str {
 pub async fn start_server(port: u16) -> anyhow::Result<()> {
     let app = create_router();
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    
+
     tracing::info!("ComLink server listening on http://{}", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }

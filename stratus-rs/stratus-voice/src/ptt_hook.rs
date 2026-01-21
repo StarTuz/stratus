@@ -11,7 +11,7 @@ use std::time::Duration;
 struct PttState {
     ptt: bool,
     #[serde(default)]
-    timestamp: i64,
+    _timestamp: i64,
 }
 
 pub struct PTTMonitor {

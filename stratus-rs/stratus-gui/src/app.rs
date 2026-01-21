@@ -30,10 +30,10 @@ pub struct StratusApp {
     atc_engine: AtcEngine,
     cmd_writer: CommandWriter,
     warmup: WarmupService,
-    pending_prompt: Option<String>,
+    _pending_prompt: Option<String>,
     #[cfg(target_os = "linux")]
     speech: Option<SpeechProxy<'static>>,
-    config: StratusConfig,
+    _config: StratusConfig,
 
     // Paths
     data_dir: PathBuf,
@@ -111,11 +111,11 @@ impl StratusApp {
             atc_engine,
             cmd_writer,
             warmup,
-            pending_prompt: None,
+            _pending_prompt: None,
             data_dir,
             #[cfg(target_os = "linux")]
             speech: None,
-            config,
+            _config: config,
         };
 
         // Initial tasks
@@ -174,7 +174,6 @@ impl StratusApp {
                 let mut engine = self.atc_engine.clone();
                 let telemetry = self.telemetry.clone();
                 let pilot_msg = text.clone();
-                let writer = self.cmd_writer.clone(); // Can we clone? CommandWriter needs Clone. It's just a PathBuf.
 
                 Task::perform(
                     async move {

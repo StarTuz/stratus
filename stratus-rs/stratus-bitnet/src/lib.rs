@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct BitNetClient {
-    device: Device,
+    _device: Device,
     model_path: Option<PathBuf>,
     model: Option<std::sync::Arc<BitLlama>>,
 }
@@ -22,7 +22,7 @@ impl BitNetClient {
         };
 
         Ok(Self {
-            device,
+            _device: device,
             model_path: None,
             model: None,
         })

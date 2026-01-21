@@ -33,9 +33,9 @@ struct BitAttention {
     k_proj: BitLinear,
     v_proj: BitLinear,
     o_proj: BitLinear,
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
+    _num_heads: usize,
+    _num_kv_heads: usize,
+    _head_dim: usize,
 }
 
 impl BitAttention {
@@ -50,9 +50,9 @@ impl BitAttention {
             k_proj,
             v_proj,
             o_proj,
-            num_heads: config.num_attention_heads,
-            num_kv_heads: config.num_key_value_heads,
-            head_dim: config.hidden_size / config.num_attention_heads,
+            _num_heads: config.num_attention_heads,
+            _num_kv_heads: config.num_key_value_heads,
+            _head_dim: config.hidden_size / config.num_attention_heads,
         })
     }
 

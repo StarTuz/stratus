@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use log::{debug, info, warn};
+use log::{info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use webrtc_vad::{Vad, VadMode};
 
 pub struct AudioPipeline {
-    vad: Arc<Mutex<Vad>>,
+    _vad: Arc<Mutex<Vad>>,
     is_recording: Arc<AtomicBool>,
     buffer: Arc<Mutex<Vec<i16>>>,
 }
@@ -16,7 +16,7 @@ impl AudioPipeline {
         let vad =
             Vad::new_with_rate_and_mode(webrtc_vad::SampleRate::Rate16kHz, VadMode::Aggressive);
         Self {
-            vad: Arc::new(Mutex::new(vad)),
+            _vad: Arc::new(Mutex::new(vad)),
             is_recording: Arc::new(AtomicBool::new(false)),
             buffer: Arc::new(Mutex::new(Vec::new())),
         }

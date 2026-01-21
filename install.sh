@@ -33,7 +33,7 @@ if [ ! -d "build" ]; then
 fi
 cd build
 cmake .. > /dev/null 2>&1 && make > /dev/null 2>&1
-if [ -f "StratusATC/lin_x64/StratusATC.xpl" ]; then
+if [ -f "../StratusATC/lin_x64/StratusATC.xpl" ]; then
     echo -e "${GREEN}X-Plane plugin built successfully.${NC}"
 else
     echo -e "${YELLOW}Warning: Plugin build may have failed. Check adapters/xplane/README.md${NC}"
