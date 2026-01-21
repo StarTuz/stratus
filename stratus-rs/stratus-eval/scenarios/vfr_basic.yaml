@@ -32,12 +32,12 @@ steps:
     input_voice: "San Francisco Tower, Skyhawk 172SP, holding short runway 28L, ready for takeoff."
     llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Runway 28L, Cleared for Takeoff, Make Left Traffic."
     expectations:
-      - type: regex
-        value: "CLEARED FOR TAKEOFF"
-        severity: critical
       - type: state
         value: "HoldingShort"
         severity: warning
+      - type: llm_judge
+        value: "The response must include a clear 'Cleared for Takeoff' instruction and specify the runway 28L."
+        severity: critical
 
   - id: 3
     action: "Takeoff Roll"
@@ -85,8 +85,11 @@ steps:
       ground_speed_kts: 90.0
       alt_agl_ft: 1000.0
     input_voice: "Tower, Skyhawk 172SP, entering left downwind 28L."
-    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Report midfield downwind."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Runway 28L, Report midfield downwind."
     expectations:
       - type: state
         value: "InPattern(Downwind)"
+        severity: warning
+      - type: llm_judge
+        value: "ATC must acknowledge the runway (28L) and provide reporting instructions."
         severity: warning

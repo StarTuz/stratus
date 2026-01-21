@@ -44,7 +44,11 @@
 static char g_data_dir[512] = {0};
 static char g_input_file[1024] = {0};  /* We write here (telemetry) */
 static char g_output_file[1024] = {0}; /* We read here (commands from client) */
+static char g_status_file[1024] = {0}; /* Status updates from commander */
 static char g_log_file[1024] = {0};    /* Our own log file */
+
+/* Rust FFI - process_stratus_commands(cmd_path, status_path) */
+extern int process_stratus_commands(const char* command_path, const char* status_path);
 
 /* DataRef handles */
 static XPLMDataRef dr_lat = NULL;
@@ -78,6 +82,11 @@ static XPLMDataRef dr_xpdr_mode = NULL;
 static XPLMDataRef dr_ap_alt = NULL;
 static XPLMDataRef dr_ap_hdg = NULL;
 static XPLMDataRef dr_ap_vs = NULL;
+
+/* PTT Command - user can bind this in X-Plane Settings > Keyboard/Joystick */
+static XPLMCommandRef g_ptt_command = NULL;
+static int g_ptt_active = 0;  /* 1 = PTT pressed, 0 = released */
+static char g_ptt_file[1024] = {0};  /* File to signal PTT state */
 
 /* Flight loop callback ID */
 static XPLMFlightLoopID g_flight_loop_id = NULL;
@@ -152,6 +161,42 @@ static void InitDataRefs(void);
 static void InitFilePaths(void);
 static void WriteTelemetryJSON(void);
 static void ReadCommandsJSONL(void);
+static int PTTCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void *inRefcon);
+
+/* ============================================================================
+ * PTT Command Handler - writes state to file for stratus-voice to monitor
+ * ============================================================================
+ */
+static int PTTCommandHandler(XPLMCommandRef inCommand, XPLMCommandPhase inPhase, void *inRefcon) {
+    (void)inCommand;
+    (void)inRefcon;
+    
+    if (inPhase == xplm_CommandBegin) {
+        /* PTT pressed */
+        g_ptt_active = 1;
+        LOG_INFO("PTT Pressed (user can now speak)");
+        
+        /* Write state to file */
+        FILE *fp = fopen(g_ptt_file, "w");
+        if (fp) {
+            fprintf(fp, "{\"ptt\": true, \"timestamp\": %ld}\n", (long)time(NULL));
+            fclose(fp);
+        }
+    } else if (inPhase == xplm_CommandEnd) {
+        /* PTT released */
+        g_ptt_active = 0;
+        LOG_INFO("PTT Released (processing speech)");
+        
+        /* Write state to file */
+        FILE *fp = fopen(g_ptt_file, "w");
+        if (fp) {
+            fprintf(fp, "{\"ptt\": false, \"timestamp\": %ld}\n", (long)time(NULL));
+            fclose(fp);
+        }
+    }
+    
+    return 0;  /* Don't consume the command - allow other handlers */
+}
 
 /* ============================================================================
  * Required Plugin Callbacks
@@ -173,6 +218,12 @@ PLUGIN_API int XPluginStart(char *outName, char *outSig, char *outDesc) {
   LOG_INFO("Data directory: %s", g_data_dir);
 
   InitDataRefs();
+
+  /* Create and register the PTT command */
+  g_ptt_command = XPLMCreateCommand("stratus/ptt", 
+      "Stratus ATC Push-to-Talk - Hold to speak to ATC");
+  XPLMRegisterCommandHandler(g_ptt_command, PTTCommandHandler, 1, NULL);
+  LOG_INFO("Registered PTT command: stratus/ptt (bind in Settings > Keyboard)");
 
   /* Register the flight loop callback at ~1Hz */
   XPLMCreateFlightLoop_t fl_params = {
@@ -198,7 +249,7 @@ PLUGIN_API void XPluginStop(void) {
 PLUGIN_API int XPluginEnable(void) {
   /* Schedule flight loop to run every 1 second */
   if (g_flight_loop_id) {
-    XPLMScheduleFlightLoop(g_flight_loop_id, 1.0f, 1);
+    XPLMScheduleFlightLoop(g_flight_loop_id, 0.1f, 1);
   }
   LOG_INFO("Plugin enabled - telemetry streaming started");
   return 1;
@@ -279,6 +330,10 @@ static void InitFilePaths(void) {
            "%s" PATH_SEP "stratus_telemetry.json", g_data_dir);
   snprintf(g_output_file, sizeof(g_output_file),
            "%s" PATH_SEP "stratus_commands.jsonl", g_data_dir);
+  snprintf(g_status_file, sizeof(g_status_file),
+           "%s" PATH_SEP "stratus_status.jsonl", g_data_dir);
+  snprintf(g_ptt_file, sizeof(g_ptt_file),
+           "%s" PATH_SEP "stratus_ptt.json", g_data_dir);
   snprintf(g_log_file, sizeof(g_log_file),
            "%s" PATH_SEP "stratus_atc.log", g_data_dir);
 }
@@ -343,7 +398,7 @@ static float FlightLoopCallback(float inElapsedSinceLastCall,
   WriteTelemetryJSON();
   ReadCommandsJSONL();
 
-  return 1.0f; /* Call again in 1 second */
+  return 0.1f; /* Call again in 0.1 seconds (10Hz) */
 }
 
 static void WriteTelemetryJSON(void) {
@@ -447,14 +502,6 @@ static void WriteTelemetryJSON(void) {
 }
 
 static void ReadCommandsJSONL(void) {
-  /* TODO: Implement command reading from stratus_commands.jsonl */
-  /*
-   * Commands from the client would include:
-   * - set_com1_frequency
-   * - set_transponder_code
-   * - set_autopilot_altitude
-   * etc.
-   *
-   * Each line is a JSON object. We read, parse, execute, then truncate.
-   */
+  /* Call the Rust CommandParser logic */
+  process_stratus_commands(g_output_file, g_status_file);
 }

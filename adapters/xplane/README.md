@@ -1,125 +1,66 @@
-# StratusATC X-Plane Adapter
+# StratusATC X-Plane Adapter (Native C)
 
-A Python plugin for X-Plane 11/12 that provides bidirectional communication with the StratusATC native client.
+A native C plugin for X-Plane 11/12 that provides bidirectional communication with the StratusATC client.
 
 ## Features
 
 - **Telemetry Export**: Exports aircraft position, attitude, radio frequencies, and transponder state
 - **Command Input**: Accepts commands to set frequencies and transponder in the simulator
-- **Low Latency**: Updates every 0.5 seconds via FlightLoop callback
+- **High Performance**: Native C++ implementation, updates every frame (or configured Hz)
+- **Zero Python**: Replaces the legacy Python/XPPython3 plugin.
 
 ## Installation
 
 ### Requirements
+
 - X-Plane 11 or 12 (Linux, Mac, Windows)
-- **XPPython3** (Required for the plugin to load)
-  - Download: [https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html](https://xppython3.readthedocs.io/en/latest/usage/installation_plugin.html)
-  - Follow instructions to install `XPPython3` into `Resources/plugins/`
-
-### Automatic Installation
-The StratusATC client attempts to automatically install the adapter plugin to:
-`X-Plane/Resources/plugins/PythonPlugins/StratusATC`
-
-If automatic installation fails, follow the manual steps below.
+- **No dependencies**: The plugin is self-contained.
 
 ### Manual Installation
-1. Ensure XPPython3 is installed (see Requirements above).
-2. Copy the plugin folder:
+
+1. Build or download the `StratusATC` plugin folder.
+2. Copy the plugin folder to specific X-Plane directory:
+
    ```bash
-   # Create the PythonPlugins directory if it doesn't exist (created by XPPython3 usually)
-   mkdir -p "X-Plane/Resources/plugins/PythonPlugins/StratusATC"
-   
-   # Copy files
-   cp PI_Stratus.py "X-Plane/Resources/plugins/PythonPlugins/StratusATC/"
-   cp overlay.py "X-Plane/Resources/plugins/PythonPlugins/StratusATC/"
+   cp -r StratusATC "X-Plane/Resources/plugins/"
    ```
+
 3. Restart X-Plane.
+
+## Build Instructions (Linux)
+
+You need `cmake` and `gcc`/`clang`.
+
+```bash
+cd adapters/xplane
+./setup_sdk.sh  # Download X-Plane SDK headers if missing
+mkdir build && cd build
+cmake ..
+make
+```
+
+The compiled plugin will be at `adapters/xplane/StratusATC/lin_x64/StratusATC.xpl`.
 
 ## Data Exchange
 
 The plugin communicates with the client via JSON files in `~/.local/share/StratusATC/`:
 
 ### Telemetry (Plugin → Client)
-File: `stratus_telemetry.json`
 
-```json
-{
-  "latitude": 37.8136,
-  "longitude": -122.4089,
-  "altitude_msl": 5000.0,
-  "heading_mag": 270.0,
-  "com1": {
-    "active": "121.500",
-    "standby": "118.000",
-    "power": true
-  },
-  "com2": {
-    "active": "127.100",
-    "standby": "134.225",
-    "power": true
-  },
-  "transponder": {
-    "code": "1200",
-    "mode": "ALT"
-  },
-  "timestamp": 1735324800.0,
-  "sim": "xplane12"
-}
-```
+File: `stratus_telemetry.json` (Updated at 1Hz or configured rate)
 
 ### Commands (Client → Plugin)
-File: `stratus_commands.json`
 
-```json
-{
-  "commands": [
-    {"type": "set_com1_standby", "frequency": "127.100"},
-    {"type": "swap_com1"},
-    {"type": "set_transponder", "code": "4521"}
-  ],
-  "timestamp": 1735324800.0
-}
-```
-
-## Supported Commands
-
-| Command | Parameters | Description |
-|---------|------------|-------------|
-| `set_com1_active` | `frequency` | Set COM1 active frequency |
-| `set_com1_standby` | `frequency` | Set COM1 standby frequency |
-| `swap_com1` | - | Swap COM1 active/standby |
-| `set_com2_active` | `frequency` | Set COM2 active frequency |
-| `set_com2_standby` | `frequency` | Set COM2 standby frequency |
-| `swap_com2` | - | Swap COM2 active/standby |
-| `set_transponder` | `code` | Set transponder squawk code |
-| `set_transponder_mode` | `mode` | Set mode (OFF/STBY/ON/ALT) |
-
-## DataRefs Used
-
-### Radios
-- `sim/cockpit2/radios/actuators/com1_frequency_hz_833`
-- `sim/cockpit2/radios/actuators/com1_standby_frequency_hz_833`
-- `sim/cockpit2/radios/actuators/com2_frequency_hz_833`
-- `sim/cockpit2/radios/actuators/com2_standby_frequency_hz_833`
-- `sim/cockpit/radios/transponder_code`
-- `sim/cockpit/radios/transponder_mode`
-
-### Position
-- `sim/flightmodel/position/latitude`
-- `sim/flightmodel/position/longitude`
-- `sim/flightmodel/position/elevation`
-- `sim/flightmodel/position/mag_psi`
+File: `stratus_commands.jsonl` (Polled each frame)
 
 ## Troubleshooting
 
 ### Plugin not loading
-- Ensure XPPython3 is installed and enabled
-- Check X-Plane log for errors
+
+- Check `Log.txt` in the X-Plane root directory.
+- Verify `StratusATC.xpl` is in `Resources/plugins/StratusATC/lin_x64/`.
 
 ### No telemetry data
-- Verify the data directory exists: `ls ~/.local/share/StratusATC/`
-- Check if telemetry file is being updated: `tail -f ~/.local/share/StratusATC/stratus_telemetry.json`
 
-### Commands not working
-- Check X-Plane log for `[StratusATC]` messages
-- Verify command file format is valid JSON
+- Verify the data directory exists: `ls ~/.local/share/StratusATC/`
+- Check permissions on `~/.local/share/StratusATC/stratus_telemetry.json`.

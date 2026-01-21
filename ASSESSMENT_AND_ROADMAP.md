@@ -4,10 +4,11 @@
 
 Stratus ATC is an **open source, fully local AI ATC** for flight simulators. It runs entirely on your hardware using Ollama for LLM inference and local TTS, requiring no cloud services or subscriptions.
 
-The architecture is "Brain vs Motor":
+The architecture is "Rust Trio":
 
-1. **Stratus (The Brain)**: All ATC logic, FAA phraseology, telemetry tracking, and AI prompt construction.
-2. **speechserverdaemon (The Motor)**: TTS/STT/LLM engine (D-Bus interface).
+1. **stratus-gui (The Brain)**: All ATC logic, telemetry tracking, and AI prompt construction.
+2. **stratus-voice (The Ears)**: Local speech engine (D-Bus interface).
+3. **stratus-commander (The Hands)**: FFI Library for Sim Control.
 
 > [!CAUTION]
 > **LEGAL DISCLAIMER**: This software and any associated AI features (Mentor, Co-Pilot, ATC) are for **ENTERTAINMENT PURPOSES ONLY**. They are NOT for real flight training, certified instruction, or use in actual aircraft. The advice given by the AI may be inaccurate, dangerous, or contrary to real-world aviation regulations.
@@ -16,16 +17,17 @@ The architecture is "Brain vs Motor":
 
 ### 1.1 Core Components
 
-1. **Local AI (Ollama)**: Runs on your machine, provides LLM responses for ATC.
-2. **The Client App (Python/Qt6)**:
-   - Captures microphone audio (STT via Whisper)
+1. **Local AI (Ollama)**: Runs on your machine (Llama 3 recommended).
+2. **The Client App (Rust/Iced)**:
+   - Captures microphone audio (via `stratus-voice` D-Bus signal)
    - Displays ATC communications
    - Reads telemetry from simulator
    - Generates context-aware ATC prompts
-3. **The Simulator Adapter (The "Spoke")**:
+   - Sends Text-to-Speech commands
+3. **The Simulator Adapter (Native C)**:
    - Reads simulator internal state
    - Writes to `stratus_telemetry.json` (1Hz update)
-   - Reads `stratus_commands.jsonl` and executes commands
+   - Reads `stratus_commands.jsonl` and executes commands via `stratus-commander`.
 
 ### 1.2 Data Exchange (Telemetry)
 
@@ -40,25 +42,24 @@ File-based interface at `~/.local/share/StratusATC`:
 
 ### 2.1 Linux (X-Plane)
 
-- **X-Plane 11/12**: Native C plugin (`StratusATC.xpl`) or Python via XPPython3
-- **MSFS (Proton)**: Possible via SimConnect bridge (future work)
+- **X-Plane 11/12**: Native C plugin (`StratusATC.xpl`) embedding Rust logic.
+- **MSFS (Proton)**: Possible via SimConnect bridge (future work).
 
 ### 2.2 macOS (X-Plane)
 
-- Universal Binary (ARM64/x86_64) plugin
-- Entitlements for Microphone access required
+- Universal Binary (ARM64/x86_64) plugin can be built from `stratus-commander`.
 
 ---
 
 ## 3. Technology Stack
 
-- **Language**: Python 3.11
-- **GUI Framework**: PySide6 (Qt6)
-- **Audio**: SoundDevice (PortAudio wrapper)
+- **Language**: Rust
+- **GUI Framework**: Iced
+- **Audio**: cpal + webrtc-vad (in `stratus-voice`)
 - **LLM**: Ollama (local)
-- **STT**: Whisper (local)
-- **TTS**: speechd-ng (local)
-- **Packaging**: PyInstaller (AppImage/deb)
+- **STT**: speechd-ng / whisper.cpp (via `stratus-voice`)
+- **TTS**: speech-dispatcher
+- **IPC**: D-Bus
 
 ---
 
@@ -68,24 +69,25 @@ File-based interface at `~/.local/share/StratusATC`:
 
 - X-Plane native plugin (telemetry export)
 - Local AI integration (Ollama)
-- Qt6 GUI client
-- ComLink web interface
+- Rust Iced GUI client
 
 ### ✅ Phase 2: ATC Logic (Complete)
 
 - FAA VFR phraseology
 - Context-aware prompts
-- Manual identity overrides
+- `AtcEngine` state machine in Rust
 
-### 🚧 Phase 3: Voice Input (In Progress)
+### ✅ Phase 3: Voice Input (Complete)
 
-- Whisper STT integration
-- PTT hotkey binding
+- `stratus-voice` service created
+- D-Bus signal emission (`SpeechRecognized`)
+- PTT via `evdev`
 
-### 📋 Phase 4: Sim Control
+### ✅ Phase 4: Sim Control (Complete)
 
-- Parse AI responses → control aircraft
-- Set squawk codes, frequencies via DataRefs
+- `stratus-commander` FFI library
+- Command parsing in `AtcEngine`
+- Execution in X-Plane
 
 ### 📋 Phase 5: Packaging & Release
 
@@ -104,6 +106,7 @@ File-based interface at `~/.local/share/StratusATC`:
 | **No Subscription** | ✅ | Open source, free forever |
 | **Linux Native** | ✅ | First-class support |
 | **Voice Privacy** | ✅ | Audio stays on your machine |
+| **Zero Python** | ✅ | No external dependencies |
 
 ### 5.2 DataRefs We Leverage
 
@@ -116,23 +119,7 @@ sim/cockpit/radios/transponder_code
 
 ---
 
-## 6. Advanced Features (Future)
+## 6. Next Steps
 
-### Mentor System
-
-- Radio handling (Full/Partial/None)
-- Real-time flight advice
-- "Certified Fun Flight Lessons" mode
-
-### Co-Pilot Control (Research)
-
-- Full flight automation via DataRefs
-- Challenge: AI control of yoke/throttle
-
----
-
-## 7. Next Steps
-
-1. Complete PTT/Voice Input (Phase 3)
-2. Implement Sim Control (Phase 4)
-3. Package for distribution
+1. Package `stratus-voice` and `stratus-gui` for distribution.
+2. Refine LLM prompts for better accuracy.

@@ -1,0 +1,37 @@
+meta:
+  id: "EMR-001"
+  description: "VFR Engine Failure on Departure"
+
+context:
+  airport: "KSFO"
+  aircraft: "N172SP (Cessna 172)"
+
+steps:
+  - id: 1
+    action: "Takeoff Roll"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 55.0
+      alt_agl_ft: 0.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "TakeoffRoll"
+        severity: warning
+
+  - id: 2
+    action: "Engine Failure (In air)"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 70.0
+      alt_agl_ft: 400.0
+    input_voice: "Tower, Skyhawk 172SP, Engine Failure! Request emergency landing runway 28L."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Roger, Runway 28L Cleared to Land, emergency equipment is on standby."
+    expectations:
+      - type: state
+        value: "InPattern(Upwind)" # Machine transitions to Upwind > 300ft
+        severity: warning
+      - type: llm_judge
+        value: "ATC must acknowledge the emergency and provide immediate priority landing clearance."
+        severity: critical

@@ -1,13 +1,14 @@
 # Project Status: Stratus ATC
 
-## ✅ Current Status: Local AI ATC Operational
+## ✅ Current Status: Pure Rust Rewrite (Zero Python)
 
-**January 2, 2025** - Stratus ATC is a fully functional offline ATC simulation using local AI.
+**January 14, 2026** - Stratus ATC has successfully migrated to a pure Rust architecture. The legacy Python components have been archived.
 
-### Architecture: "Brain vs Motor"
+### Architecture: "Rust Trio"
 
-- **Stratus (Client)**: **The Brain**. All ATC logic, FAA phraseology, telemetry tracking, and AI prompt construction.
-- **speechserverdaemon (Daemon)**: **The Motor**. Local speech engine (D-Bus interface).
+- **`stratus-voice` (Service)**: Handles PTT, Audio Capture, VAD, and STT (Signal Emitter).
+- **`stratus-gui` (App/Brain)**: Handles UI, Telemetry, LLM Context, Command Processing, and TTS.
+- **`stratus-commander` (FFI Lib)**: Embedded in the X-Plane C plugin for controlling the sim.
 
 ---
 
@@ -18,84 +19,51 @@
 - **Status**: Working ✅
 - **Location**: `adapters/xplane/StratusATC/lin_x64/StratusATC.xpl`
 - **Features**:
-  - Reads all essential DataRefs (position, radios, transponder, autopilot)
-  - Writes telemetry to `~/.local/share/StratusATC/stratus_telemetry.json` at 1Hz
-  - Own log file (`stratus_atc.log`) - doesn't pollute X-Plane's Log.txt
-  - Verified working in X-Plane 12.3.3
+  - Reads DataRefs (position, radios, transponder, autopilot)
+  - Writes telemetry to `~/.local/share/StratusATC/stratus_telemetry.json`
+  - Reads commands from `~/.local/share/StratusATC/stratus_commands.jsonl`
+  - **Zero Python**: No XPPython3 dependency.
 
-#### 2. Local AI Integration (Ollama)
+#### 2. Voice Service (`stratus-voice`)
 
 - **Status**: Working ✅
 - **Features**:
-  - Ollama status display and service control
-  - Model pulling directly from GUI
-  - 30-second timeouts for cold-starts
+  - `evdev` for low-latency PTT hook.
+  - `webrtc-vad` for voice activity detection.
+  - D-Bus integration for broadcast signaling.
 
-#### 3. Build System
-
-- **Status**: Working ✅
-- CMake configuration for Linux (tested), macOS and Windows (config ready)
-- SDK download script (`setup_sdk.sh`)
-- Fat plugin directory structure
-
-#### 4. Qt6 GUI Client
+#### 3. GUI Client (`stratus-gui`)
 
 - **Status**: Working ✅
-- Modern dark theme
-- Settings panel with identity overrides
-- ATC communication display
-
-#### 5. ComLink Web Interface
-
-- **Status**: Working ✅
-- Touch-friendly for tablets/VR
-- Full brain management via web
+- **Tech**: Rust Iced (Cross-platform GUI).
+- **Features**:
+  - Real-time conversation log.
+  - Ollama integration (Llama 3).
+  - Telemetry display.
 
 ---
 
 ### 🚧 Next Steps
 
-#### Phase 3: Voice Input
+#### Refinement
 
-- Whisper STT integration
-- PTT hotkey binding
-
-#### Phase 4: Sim Control & Command Execution
-
-- Parse AI responses to control the simulator
-- Set squawk codes, frequencies, autopilot via DataRefs
+- Improve command parsing robustness (Currently regex-based).
+- Add config file for PTT device selection (currently hardcoded or scan-based).
 
 ---
 
 ## Architecture Diagram
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                         Stratus Client                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
-│  │    Audio    │  │     UI      │  │   Telemetry    │           │
-│  │   Handler   │  │  (PySide6)  │  │   Watcher   │           │
-│  └─────────────┘  └─────────────┘  └──────┬──────┘           │
-└────────────────────────────────────────────┼─────────────────┘
-                                             │ JSON Files
-┌────────────────────────────────────────────┼─────────────────┐
-│   stratus_telemetry.json ◄──────────────────────┤                  │
-│   stratus_commands.jsonl ─────────────────────►                  │
-│                  ~/.local/share/StratusATC/                   │
-└────────────────────────────────────────────┬─────────────────┘
-                                             │ Read/Write
-┌────────────────────────────────────────────┴─────────────────┐
-│                    X-Plane Plugin (C)                         │
-│                      StratusATC.xpl                           │
-│  ┌─────────────────────────────────────────────────────────┐  │
-│  │ DataRefs → JSON (1Hz) │ Commands → DataRefs (polling)   │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────┐
-│                        X-Plane 12                             │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    User((Pilot)) -- "Voice (PTT)" --> Voice[stratus-voice]
+    Voice -- "D-Bus Signal" --> GUI[stratus-gui]
+    GUI -- "Context" --> LLM[Ollama]
+    GUI -- "TTS" --> Spd[Speech Dispatcher]
+    GUI -- "Commands" --> File[stratus_commands.jsonl]
+    Plugin[X-Plane C Plugin] -- "Telemetry" --> File2[stratus_telemetry.json]
+    Plugin -- "Execute" --> Sim[X-Plane 12]
+    File -- "Read" --> Plugin
 ```
 
 ---
@@ -105,54 +73,27 @@
 ```
 Stratus/
 ├── README.md                    # Project overview
-├── ASSESSMENT_AND_ROADMAP.md    # Technical roadmap
-├── PROJECT_STATUS.md            # This file
+├── stratus-rs/                  # Rust Workspace
+│   ├── stratus-core/            # Shared logic (Brain)
+│   ├── stratus-voice/           # Voice Service
+│   ├── stratus-gui/             # Iced App
+│   └── stratus-commander/       # FFI Library
 ├── adapters/
 │   └── xplane/
-│       ├── CMakeLists.txt       # Build configuration
-│       ├── README.md            # Build instructions
-│       ├── setup_sdk.sh         # SDK download script
-│       ├── src/
-│       │   └── stratus_plugin.c # Plugin source
-│       └── StratusATC/          # Built plugin (fat format)
-│           └── lin_x64/
-│               └── StratusATC.xpl  # Linux plugin ✅
-├── client/
-│   ├── requirements.txt
-│   └── src/
-│       ├── main.py              # Entry point
-│       ├── core/
-│       │   └── providers/       # ATC provider implementations
-│       ├── telemetry/
-│       │   └── file_watcher.py  # Telemetry file handler
-│       └── ui/
-│           └── main_window.py   # PySide6 window
-├── docs/
-│   ├── ATC_ROADMAP.md           # ATC feature roadmap
-│   ├── ATC_PHRASEOLOGY.md       # FAA phraseology reference
-│   └── VFR_PHRASEOLOGY.md       # VFR communications guide
-└── tests/
-    └── test_prompt_logic.py     # Prompt regression tests
+│       └── src/
+│           └── stratus_plugin.c # C Plugin (Links stratus-commander)
+├── docs/                        # Documentation
+└── .legacy_client/              # Archived Python code
 ```
 
 ---
 
-## Test Commands
+## Run Commands
 
 ```bash
-# Run the client
-cd /home/startux/Code/Stratus && python client/src/main.py
+# Run the Voice Service
+cd stratus-rs && cargo run --bin stratus-voice
 
-# Run tests
-cd /home/startux/Code/Stratus && PYTHONPATH=. pytest tests/
-
-# Check X-Plane plugin logs
-tail -f ~/.local/share/StratusATC/stratus_atc.log
+# Run the GUI
+cd stratus-rs && cargo run --bin stratus-gui
 ```
-
----
-
-## Resources
-
-- [X-Plane SDK](https://developer.x-plane.com/sdk/) - Plugin development
-- [Ollama](https://ollama.ai/) - Local LLM inference

@@ -4,6 +4,7 @@ members = ["stratus-commander",
     "stratus-core",
     "stratus-gui", "stratus-voice",
     "stratus-eval",
+    "stratus-bitnet",
 ]
 
 [workspace.package]

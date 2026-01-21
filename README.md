@@ -1,90 +1,75 @@
-# Stratus ☁️
+# StratusATC
 
-**Open Source AI Air Traffic Control for Flight Simulators**
+**A Next-Generation, Open-Source ATC for X-Plane 12 (Linux-First)**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)]()
-[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-brightgreen.svg)]()
+StratusATC is a local, privacy-focused Air Traffic Control system for X-Plane 12. It uses local LLMs (Ollama) and neural speech recognition to provide a fluid, realistic ATC experience without relying on cloud APIs or subscriptions.
 
-Stratus is a native Linux ATC (Air Traffic Control) system for flight simulators. It provides realistic voice-controlled ATC interactions using local AI and text-to-speech.
+## Architecture (Pure Rust)
 
-## Features
+The system needs **ZERO Python**. It is built entirely in Rust for performance and stability.
 
-- 🎙️ **Voice Control** - Talk to ATC using natural speech
-- 🔊 **Realistic ATC Audio** - AI-generated ATC responses with proper phraseology
-- ✈️ **X-Plane Integration** - Native plugin for X-Plane 11/12
-- 🖥️ **Qt6 GUI** - Modern dark-themed desktop client
-- 🌐 **ComLink Web UI** - Touch-friendly interface for tablets/VR
-- 🐧 **Linux Native** - No Wine or Proton required
+```mermaid
+graph TD
+    User((Pilot)) -- "Voice (PTT)" --> Voice[stratus-voice (Service)]
+    Voice -- "D-Bus Signal" --> GUI[stratus-gui (App/Brain)]
+    GUI -- "Ollama Generation" --> LLM[Ollama (Llama 3)]
+    GUI -- "Text-to-Speech" --> Spd[speech-dispatcher]
+    GUI -- "Processing" --> Core[stratus-core]
+    Core -- "Commands (.jsonl)" --> Sim[X-Plane 12]
+    Sim -- "Telemetry (.json)" --> GUI
+```
 
-## Quick Start
+### Components
 
-### Prerequisites
+* **`stratus-voice`**: A background service that monitors your PTT key, handles audio capture, performs Voice Activity Detection (VAD), and transcribes speech. Emits D-Bus signals.
+* **`stratus-gui`**: The main application window. It acts as the "Brain", receiving voice signals, managing the conversation context with the LLM, and displaying the UI.
+* **`stratus-core`**: Shared library containing the "AtcEngine", command parsing logic, and state management.
+* **`stratus-commander`**: Rust FFI library linked into the X-Plane C plugin for controlling the simulator.
 
-- X-Plane 11 or 12 with [XPPython3](https://xppython3.readthedocs.io/)
-- Python 3.10+
-- Qt6 (for GUI)
+## Prerequisites
 
-### Installation
+* **OS**: Linux (Arch/Ubuntu/Fedora)
+* **Simulator**: X-Plane 12 (Native C Plugin provided)
+* **AI Backend**: [Ollama](https://ollama.com/) running `llama3` or compatible model.
+* **TTS**: `speech-dispatcher` (`sudo pacman -S speech-dispatcher` or equivalent).
+* **Build Tools**: Rust (Cargo), `cmake`, `clang`.
+
+## Installation & Running
+
+### 1. Build the Project
 
 ```bash
-# Clone the repository
-git clone https://github.com/StarTuz/stratus.git
-cd stratus
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r client/requirements.txt
-
-# Run (auto-installs X-Plane plugin)
-python client/src/main.py
+cd stratus-rs
+cargo build --release
 ```
 
-### ComLink (Tablet/VR Interface)
+### 2. Configure PTT
 
-Access from any device on your network:
-```
-http://localhost:8080/comlink
-```
+Edit `stratus-rs/stratus-voice/src/ptt_hook.rs` to point to your specific input device (e.g., `/dev/input/by-id/...`).
+*(Future versions will have a config file)*
 
-## Architecture
+### 3. Run the Voice Service
 
-```
-┌─────────────┐      JSON Files       ┌──────────────────┐
-│  X-Plane    │ ──────────────────────│  Stratus Client  │
-│  Plugin     │  stratus_telemetry.json    │  (Python/Qt6)    │
-└─────────────┘                       └────────┬─────────┘
-                                               │
-                              ┌────────────────┼────────────────┐
-                              │                │                │
-                              ▼                ▼                ▼
-                       ┌──────────┐    ┌──────────┐    ┌──────────┐
-                       │ LocalATC │    │ SayIntent│    │ (Future) │
-                       │ LLM+TTS  │    │   (opt)  │    │ backends │
-                       └──────────┘    └──────────┘    └──────────┘
+This service needs access to input devices.
+
+```bash
+cd stratus-rs
+cargo run --bin stratus-voice
 ```
 
-## Simulator Support
+### 4. Run the GUI
 
-| Simulator | Linux | macOS | Status |
-|-----------|-------|-------|--------|
-| X-Plane 12 | ✅ | 🔜 | Native plugin |
-| X-Plane 11 | ✅ | 🔜 | Native plugin |
-| MSFS 2024 | 🔄 | ❌ | Via Proton (planned) |
+Launch the main application.
 
-## Documentation
+```bash
+cd stratus-rs
+cargo run --bin stratus-gui
+```
 
-- [HANDOFF.md](HANDOFF.md) - Project status and technical details
-- [ASSESSMENT_AND_ROADMAP.md](ASSESSMENT_AND_ROADMAP.md) - Roadmap
-- [X-Plane Plugin](adapters/xplane/README.md) - Plugin documentation
+## Legacy
 
-## Contributing
-
-Contributions welcome! This is a community-driven open source project.
+The old Python prototype has been archived to `.legacy_client/` and is no longer used.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+MIT

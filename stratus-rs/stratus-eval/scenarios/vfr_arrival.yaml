@@ -1,0 +1,95 @@
+meta:
+  id: "VFR-002"
+  description: "VFR Arrival and Landing at KSFO"
+
+context:
+  airport: "KSFO"
+  aircraft: "N172SP (Cessna 172)"
+
+steps:
+  - id: 1
+    action: "Initial Contact (Inbound)"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 100.0
+      alt_agl_ft: 2500.0
+    input_voice: "San Francisco Tower, Skyhawk 172SP, 10 miles south, inbound for landing with information Alpha."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, enter left base runway 28L, report 2 mile base."
+    expectations:
+      - type: state
+        value: "InPattern(Downwind)"
+        severity: warning
+      - type: llm_judge
+        value: "ATC must provide pattern entry instructions and a reporting point."
+        severity: critical
+
+  - id: 2
+    action: "On Base Leg"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 85.0
+      alt_agl_ft: 800.0
+    input_voice: "Tower, Skyhawk 172SP, 2 mile base 28L."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Runway 28L, Cleared to Land."
+    expectations:
+      - type: state
+        value: "Approach"
+        severity: warning
+      - type: llm_judge
+        value: "ATC must issue a clear landing clearance for runway 28L."
+        severity: critical
+
+  - id: 3
+    action: "Short Final / Touchdown"
+    telemetry:
+      on_ground: false # Transitioning
+      ground_speed_kts: 65.0
+      alt_agl_ft: 30.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "Landing"
+        severity: warning
+
+  - id: 4
+    action: "Rollout"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 25.0
+      alt_agl_ft: 0.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "ClearOfRunway"
+        severity: warning
+
+  - id: 5
+    action: "Clear of Runway"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 8.0
+      alt_agl_ft: 0.0
+    input_voice: "Tower, Skyhawk 172SP, clear of 28L at Bravo."
+    llm_mock_response: "Skyhawk 172SP, Roger, clear of runway 28L at Bravo. Taxi to parking via Alpha, have a good day."
+    expectations:
+      - type: state
+        value: "ClearOfRunway"
+        severity: warning
+      - type: llm_judge
+        value: "ATC should acknowledge the aircraft is clear and provide taxi to parking instructions."
+        severity: warning
+
+  - id: 6
+    action: "At Parking"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 0.0
+      alt_agl_ft: 0.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "Parked"
+        severity: warning

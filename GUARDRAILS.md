@@ -7,23 +7,7 @@
 ### No-Touch Zones
 
 - **FORBIDDEN:** Modifying or deleting system binaries (e.g., `/usr/bin/`, `/home/startux/.local/bin/`).
-- **FORBIDDEN:** Modifying `speechserverdaemon` source code from a Stratus task (see Architecture Boundary).
-- **FORBIDDEN:** Deleting project source files based on heuristic assumptions without Explicit Verification (EV).
 - **FORBIDDEN:** Modifying X-Plane installation files outside `Output/plugins/StratusATC/`.
-
-### Architecture Boundary
-
-```
-Stratus (Brain)               speechserverdaemon (Motor)
-─────────────────              ───────────────────────────
-ATC logic, prompts             TTS/STT/LLM (Piper, Vosk, Ollama)
-Telemetry tracking             D-Bus interface
-X-Plane plugin                 Audio device management
-          │                              │
-          └──────── D-Bus ───────────────┘
-```
-
-> **CRITICAL:** The `speechserverdaemon` is a standalone, release-stage service used by multiple projects. All ATC-specific logic MUST be implemented in Stratus by injecting context into `Think(context)` calls.
 
 ### Action Risk Tiers
 
@@ -31,7 +15,7 @@ X-Plane plugin                 Audio device management
 |:-----|:-----------|:---------|
 | **T0** | Safe | Read-only, linting, UI state, `view_file` |
 | **T1** | Normal | Incremental code edits, new feature files, test additions |
-| **T2** | High-Risk | Dependency changes (`Cargo.toml`, `requirements.txt`), API changes, schema changes |
+| **T2** | High-Risk | Dependency changes (`Cargo.toml`), API changes, schema changes |
 | **T3** | Restricted | File DELETIONS, binary changes, system config, X-Plane SDK updates |
 
 ### Mandatory Verification (EV)
@@ -41,61 +25,46 @@ X-Plane plugin                 Audio device management
 
 ---
 
-## 2. Input Validation
+## 2. Input Validation (Rust)
 
 ### LLM Response Validation
 
-```python
-# REQUIRED: Validate Ollama responses before TTS
-if not response or len(response.strip()) < 3:
-    logger.warning("Empty or invalid LLM response, skipping TTS")
-    return
+```rust
+// REQUIRED: Validate Ollama responses before TTS
+if response.trim().len() < 3 {
+    warn!("Empty or invalid LLM response, skipping TTS");
+    return;
+}
 
-# REQUIRED: Sanitize unexpected content
-if any(marker in response for marker in ["<|", "|>", "```"]):
-    logger.warning("LLM response contains markup, cleaning...")
-    response = clean_llm_response(response)
+// REQUIRED: Sanitize unexpected contents
+if response.contains("<|") || response.contains("```") {
+    warn!("LLM response contains markup, cleaning...");
+    // clean_llm_response(response)
+}
 ```
 
 ### Telemetry Validation
 
-```python
-# REQUIRED: Validate telemetry before prompt injection
-def validate_telemetry(data: dict) -> bool:
-    required_fields = ["latitude", "longitude", "altitude", "heading"]
-    return all(field in data and data[field] is not None for field in required_fields)
-```
-
-### Rate Limiting
-
-```python
-# REQUIRED: Max 1 ATC request per 2 seconds (LLM cold-start overhead)
-MIN_REQUEST_INTERVAL_S = 2.0
-if time.time() - last_request_time < MIN_REQUEST_INTERVAL_S:
-    return  # Rate limited
+```rust
+// REQUIRED: Validate telemetry before prompt injection
+fn validate_telemetry(data: &Telemetry) -> bool {
+    data.latitude != 0.0 && data.longitude != 0.0
+}
 ```
 
 ---
 
 ## 3. Output Validation
 
-### Entity Verification
-
-```python
-# REQUIRED: Verify airport exists before using in prompt
-airport = airport_manager.find_nearest(lat, lon)
-if airport is None:
-    logger.warning("No airport found for coordinates, using generic ATC")
-    facility_name = "Regional Approach"
-```
-
 ### Destructive Action Confirmation
 
-```python
-# REQUIRED: High-risk sim control commands need confirmation
-DANGEROUS_COMMANDS = ["gear up", "emergency", "mayday", "squawk 7700"]
-if any(cmd in ai_response.lower() for cmd in DANGEROUS_COMMANDS):
-    await confirm_with_pilot("Confirm emergency declaration?")
+```rust
+// REQUIRED: High-risk sim control commands need parsing checks
+const DANGEROUS_COMMANDS: &[&str] = &["emergency", "mayday", "squawk 7700"];
+if DANGEROUS_COMMANDS.iter().any(|&cmd| response.to_lowercase().contains(cmd)) {
+    // Flag for confirmation manually
+    warn!("Dangerous command detected in LLM response");
+}
 ```
 
 ---
@@ -104,47 +73,39 @@ if any(cmd in ai_response.lower() for cmd in DANGEROUS_COMMANDS):
 
 ### No Silent Failures
 
-```python
-# FORBIDDEN:
-try:
-    send_to_ollama(prompt)
-except:
-    pass
+```rust
+// FORBIDDEN:
+let _ = send_to_ollama(prompt);
 
-# REQUIRED:
-try:
-    send_to_ollama(prompt)
-except Exception as e:
-    logger.error(f"Ollama request failed: {e}")
-    show_user_error("AI service temporarily unavailable")
+// REQUIRED:
+if let Err(e) = send_to_ollama(prompt).await {
+    error!("Ollama request failed: {}", e);
+}
 ```
 
 ### Timeout Handling
 
-```python
-# REQUIRED: Handle LLM cold-start timeouts gracefully
-# Ollama initial inference can take up to 30s
-try:
-    response = await asyncio.wait_for(ollama_think(prompt), timeout=30.0)
-except asyncio.TimeoutError:
-    logger.warning("LLM response timed out after 30s")
-    show_status("AI is loading, please wait...")
+```rust
+// REQUIRED: Handle LLM cold-start timeouts gracefully
+use tokio::time::timeout;
+match timeout(Duration::from_secs(30), ollama.generate(prompt)).await {
+    Ok(result) => handle(result),
+    Err(_) => warn!("LLM response timed out after 30s"),
+}
 ```
 
 ---
 
-## 5. Async Safety (Rust)
+## 5. Async Safety (Rust/Tokio)
 
 ### No Blocking in Async
 
 ```rust
 // FORBIDDEN: Blocking calls in async context
-let status = child.wait()?;
+let status = std::process::Command::new("ls").status()?;
 
-// REQUIRED: Use spawn_blocking
-tokio::task::spawn_blocking(move || {
-    child.wait()
-}).await??;
+// REQUIRED: Use tokio::process or spawn_blocking
+tokio::process::Command::new("ls").status().await?;
 ```
 
 ### File I/O in Async
@@ -157,29 +118,7 @@ let telemetry = fs::read_to_string(TELEMETRY_INPUT_PATH).await?;
 
 ---
 
-## 6. Audit Logging
-
-### Action Log
-
-```python
-# REQUIRED: Log all ATC interactions
-logger.info(
-    f"ATC Exchange | Facility: {facility_name} | "
-    f"Pilot: {pilot_message[:50]}... | "
-    f"ATC: {atc_response[:50]}..."
-)
-```
-
-### Telemetry Log
-
-```python
-# REQUIRED: Log telemetry updates for debugging
-logger.debug(f"Telemetry: alt={altitude}ft hdg={heading}° spd={speed}kts")
-```
-
----
-
-## 7. X-Plane Plugin Safety
+## 6. X-Plane Plugin Safety
 
 ### Plugin Boundaries
 
@@ -206,8 +145,8 @@ if (alt_ref == NULL) {
 
 ## Summary: Critical Invariants
 
-1. **Never modify `speechserverdaemon`** from Stratus context
-2. **Validate all telemetry** before injecting into prompts
-3. **Handle 30s LLM timeouts** without freezing the UI
-4. **No silent failures** - every error path must be logged
-5. **Plugin must not crash X-Plane** - graceful degradation only
+1. **ZERO PYTHON**: Do not introduce new Python dependencies.
+2. **Validate all telemetry** before injecting into prompts.
+3. **Handle 30s LLM timeouts** without freezing the UI.
+4. **No silent failures** - every error path must be logged.
+5. **Plugin must not crash X-Plane** - graceful degradation only.

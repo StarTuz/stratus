@@ -1,9 +1,8 @@
 use anyhow::Result;
-use nix::fcntl::{flock, FlockArg};
+use nix::fcntl::{Flock, FlockArg};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -42,20 +41,24 @@ impl CommandWriter {
             return Ok(());
         }
 
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.command_path)?;
 
         // Lock for appending
-        flock(file.as_raw_fd(), FlockArg::LockExclusive)?;
+        let mut file = Flock::lock(file, FlockArg::LockExclusive).map_err(|(f, e)| {
+            anyhow::anyhow!(
+                "Failed to lock file: {} (FD: {:?})",
+                e,
+                std::os::unix::io::AsRawFd::as_raw_fd(&f)
+            )
+        })?;
 
         for cmd in commands {
             let line = serde_json::to_string(cmd)?;
             writeln!(file, "{}", line)?;
         }
-
-        flock(file.as_raw_fd(), FlockArg::Unlock)?;
 
         Ok(())
     }

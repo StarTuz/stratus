@@ -1,0 +1,18 @@
+[package]
+name = "stratus-bitnet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+candle-core = "0.8.2"
+candle-nn = "0.8.2"
+candle-transformers = "0.8.2"
+hf-hub = "0.4.1"
+tokenizers = "0.21.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+tokio = { version = "1.0", features = ["full"] }
+rayon = "1.8"

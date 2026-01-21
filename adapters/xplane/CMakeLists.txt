@@ -99,10 +99,16 @@ else()
         -nodefaultlibs
         -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.txt
     )
-    # Link standard C library
+    
+    # Path to Rust library
+    set(STRATUS_RS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../stratus-rs")
+    set(COMMANDER_LIB "${STRATUS_RS_DIR}/target/debug/libstratus_commander.so")
+    
+    # Link standard C library and Rust commander
     target_link_libraries(stratus_plugin PRIVATE
         c
         m
+        ${COMMANDER_LIB}
     )
     set_target_properties(stratus_plugin PROPERTIES
         OUTPUT_NAME "StratusATC"

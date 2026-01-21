@@ -103,7 +103,7 @@ The Blue Team focuses on feature development, domain correctness, and user exper
 
 **Consulting Areas:**
 
-- ✅ Rust/Python architecture decisions
+- ✅ Pure Rust architecture decisions
 - ✅ Agent orchestration patterns (multi-agent coordination)
 - ✅ LLM integration best practices
 - ✅ Latency optimization (sub-1s response targets)

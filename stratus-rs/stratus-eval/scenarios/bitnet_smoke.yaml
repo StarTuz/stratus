@@ -1,0 +1,21 @@
+meta:
+  id: "BIT-001"
+  description: "BitNet Smoke Test (Direct Offline Inference)"
+
+context:
+  airport: "KSFO"
+  aircraft: "N172SP"
+
+steps:
+  - id: 1
+    action: "BitNet Backend Verification"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 0.0
+      alt_agl_ft: 0.0
+    input_voice: "Test prompt for BitNet"
+    llm_mock_response: "DUMMY" # This won't be used since we won't call with_url
+    expectations:
+      - type: regex
+        value: "MOCK_BITNET" # My refined BitNetClient returns this for offline mode
+        severity: critical

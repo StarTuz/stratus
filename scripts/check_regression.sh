@@ -8,11 +8,11 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-echo "🔍 Running Stratus ATC regression checks..."
+echo "🔍 Running Stratus ATC regression checks (Zero Python Edition)..."
 
 # 1. Check for prohibited naming patterns
 echo -n "  Checking naming consistency... "
-SIMAPI_COUNT=$(grep -ri "simapi\|SimApi\|SimAPI" --include="*.rs" --include="*.py" \
+SIMAPI_COUNT=$(grep -ri "simapi\|SimApi\|SimAPI" --include="*.rs" \
   --include="*.c" . 2>/dev/null | \
   grep -v __pycache__ | grep -v target/ | grep -v tests/ | grep -v ".git" | wc -l)
 
@@ -26,7 +26,7 @@ echo -e "${GREEN}OK${NC}"
 
 # 2. Check for old directory references
 echo -n "  Checking for old directory names... "
-STRATUSAI_COUNT=$(grep -ri "StratusAI\|StratusML" --include="*.rs" --include="*.py" \
+STRATUSAI_COUNT=$(grep -ri "StratusAI\|StratusML" --include="*.rs" \
   --include="*.c" . 2>/dev/null | \
   grep -v __pycache__ | grep -v target/ | grep -v ".git" | wc -l)
 
@@ -41,23 +41,12 @@ echo -e "${GREEN}OK${NC}"
 echo -n "  Checking Rust compilation... "
 if [ -d "stratus-rs" ]; then
     cd stratus-rs
-    if ! cargo check --workspace 2>/dev/null; then
+    if ! cargo check --workspace --quiet; then
         echo -e "${RED}FAILED${NC}"
-        echo "  Rust code does not compile"
+        echo "  Rust code does not compile. Run 'cargo check' for details."
         exit 1
     fi
     cd ..
-fi
-echo -e "${GREEN}OK${NC}"
-
-# 4. Python syntax check
-echo -n "  Checking Python syntax... "
-if [ -d "client/src/core" ]; then
-    if ! python3 -m py_compile client/src/core/*.py 2>/dev/null; then
-        echo -e "${RED}FAILED${NC}"
-        echo "  Python syntax errors found"
-        exit 1
-    fi
 fi
 echo -e "${GREEN}OK${NC}"
 

@@ -12,7 +12,6 @@ use std::time::Duration;
 use stratus_core::{
     atc::AtcEngine, commands::CommandWriter, speech::SpeechProxy, voice, Telemetry, WarmupService,
 };
-use tokio_stream::wrappers::ReceiverStream;
 
 /// Main application state
 pub struct StratusApp {
@@ -71,7 +70,7 @@ pub enum Message {
             (
                 AtcEngine,
                 String,
-                String,
+                Option<String>,
                 Vec<stratus_core::commands::Command>,
             ),
             String,
@@ -201,34 +200,43 @@ impl StratusApp {
             }
             Message::ProcessingFinished(result) => {
                 match result {
-                    Ok((new_engine, _pilot, response, commands)) => {
+                    Ok((new_engine, _pilot, response_opt, commands)) => {
                         self.atc_engine = new_engine;
 
-                        // Update log with real response
-                        if let Some(last) = self.comm_log.last_mut() {
-                            if last.speaker == "ATC" {
-                                last.message = response.clone();
+                        if let Some(response) = response_opt {
+                            // Update log with real response
+                            if let Some(last) = self.comm_log.last_mut() {
+                                if last.speaker == "ATC" {
+                                    last.message = response.clone();
+                                }
                             }
-                        }
 
-                        // Execute Commands
-                        if !commands.is_empty() {
-                            if let Err(e) = self.cmd_writer.write(&commands) {
-                                eprintln!("Failed to write commands: {}", e);
+                            // Execute Commands
+                            if !commands.is_empty() {
+                                if let Err(e) = self.cmd_writer.write(&commands) {
+                                    eprintln!("Failed to write commands: {}", e);
+                                }
                             }
-                        }
 
-                        // Speak response
-                        #[cfg(target_os = "linux")]
-                        if let Some(client) = &self.speech {
-                            let t = response.clone();
-                            let c = client.clone();
-                            return Task::perform(
-                                async move {
-                                    let _ = c.speak(&t).await;
-                                },
-                                |_| Message::Tick,
-                            );
+                            // Speak response
+                            #[cfg(target_os = "linux")]
+                            if let Some(client) = &self.speech {
+                                let t = response.clone();
+                                let c = client.clone();
+                                return Task::perform(
+                                    async move {
+                                        let _ = c.speak(&t).await;
+                                    },
+                                    |_| Message::Tick,
+                                );
+                            }
+                        } else {
+                            // Radio Silence: Remove the "Processing..." entry
+                            if let Some(last) = self.comm_log.last() {
+                                if last.speaker == "ATC" && last.message == "..." {
+                                    self.comm_log.pop();
+                                }
+                            }
                         }
                     }
                     Err(e) => {
@@ -245,7 +253,8 @@ impl StratusApp {
             Message::TelemetryUpdated(result) => {
                 match result {
                     Ok(telemetry) => {
-                        self.telemetry = telemetry;
+                        self.telemetry = telemetry.clone();
+                        self.atc_engine.update_state(&telemetry);
                         self.connected = true;
                         self.last_telemetry_time = std::time::Instant::now();
                     }
@@ -361,7 +370,6 @@ impl StratusApp {
             text(format!("GS: {} kts", spd)),
             text(format!("IAS: {} kts", ias)),
             text(format!("XPDR: {:04}", self.telemetry.transponder.code)),
-            text(""),
             text(format!(
                 "COM1: {:.3}",
                 self.telemetry.radios.com1_hz as f64 / 1_000_000.0

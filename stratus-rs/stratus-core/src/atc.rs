@@ -8,8 +8,12 @@ use crate::telemetry::Telemetry;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
+use stratus_bitnet::BitNetClient;
 
 static COMMAND_REGEX: OnceLock<Regex> = OnceLock::new();
+
+const KSFO_GND: i32 = 121800; // 121.80 MHz
+const KSFO_TWR: i32 = 120500; // 120.50 MHz
 
 fn get_command_regex() -> &'static Regex {
     COMMAND_REGEX.get_or_init(|| Regex::new(r"\[([A-Z_]+)\s+(.+?)\]").unwrap())
@@ -37,11 +41,17 @@ fn parse_frequency(s: &str) -> i32 {
 /// ATC Engine - manages the conversation and prompt construction
 #[derive(Debug, Clone)]
 pub struct AtcEngine {
-    ollama: OllamaClient,
+    backend: Backend,
     conversation_history: Vec<ConversationEntry>,
     callsign: String,
     aircraft_type: String,
     state: VfrState,
+}
+
+#[derive(Debug, Clone)]
+pub enum Backend {
+    Ollama(OllamaClient),
+    BitNet(BitNetClient),
 }
 
 #[derive(Debug, Clone)]
@@ -104,8 +114,20 @@ impl VfrState {
 impl AtcEngine {
     /// Create a new ATC engine
     pub fn new(callsign: impl Into<String>, aircraft_type: impl Into<String>) -> Self {
+        // Default to BitNet for efficiency if available, or fallback to Ollama if explicitly configured
+        let backend = match BitNetClient::new() {
+            Ok(client) => Backend::BitNet(client),
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize BitNet backend: {}. Falling back to Ollama.",
+                    e
+                );
+                Backend::Ollama(OllamaClient::default())
+            }
+        };
+
         Self {
-            ollama: OllamaClient::default(),
+            backend,
             conversation_history: Vec::new(),
             callsign: callsign.into(),
             aircraft_type: aircraft_type.into(),
@@ -113,15 +135,21 @@ impl AtcEngine {
         }
     }
 
-    /// Set the Ollama model
+    /// Set the Ollama model (forcing Ollama backend)
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.ollama = self.ollama.with_model(model);
+        self.backend = match self.backend {
+            Backend::Ollama(client) => Backend::Ollama(client.with_model(model)),
+            Backend::BitNet(_) => Backend::Ollama(OllamaClient::new(model)),
+        };
         self
     }
 
-    /// Set the Ollama URL
+    /// Set the Ollama URL (forcing Ollama backend)
     pub fn with_url(mut self, url: impl Into<String>) -> Self {
-        self.ollama = self.ollama.with_url(url);
+        self.backend = match self.backend {
+            Backend::Ollama(client) => Backend::Ollama(client.with_url(url)),
+            Backend::BitNet(_) => Backend::Ollama(OllamaClient::default().with_url(url)),
+        };
         self
     }
 
@@ -169,6 +197,7 @@ Supported commands:
         let mut last_state = self.state;
         loop {
             self.state = match self.state {
+                VfrState::Parked if !on_ground => VfrState::Departure, // Jump to departure if we start in air
                 VfrState::Parked if speed_kts > 2.0 && on_ground => VfrState::Taxiing,
                 VfrState::Taxiing if speed_kts < 1.0 && on_ground => VfrState::HoldingShort,
                 VfrState::Taxiing if speed_kts > 40.0 && on_ground => VfrState::TakeoffRoll, // Immediate takeoff
@@ -201,12 +230,50 @@ Supported commands:
         }
     }
 
+    /// Get the expected frequency for the current state
+    pub fn expected_frequency(&self) -> i32 {
+        match self.state {
+            VfrState::Parked | VfrState::Taxiing | VfrState::HoldingShort => KSFO_GND,
+            _ => KSFO_TWR, // For simplicity, we use tower for all other phases for now
+        }
+    }
+
     /// Process pilot input and generate ATC response
     pub async fn process_pilot_input(
         &mut self,
         pilot_message: &str,
         telemetry: &Telemetry,
-    ) -> Result<(String, Vec<Command>), crate::ollama::OllamaError> {
+    ) -> Result<(Option<String>, Vec<Command>), crate::ollama::OllamaError> {
+        // Enforce radio frequency
+        let active_freq = telemetry.radios.com1_hz;
+        let expected_freq = self.expected_frequency();
+
+        if active_freq != expected_freq {
+            // Monitored Frequencies check (GND and TWR)
+            let monitored_freqs = vec![KSFO_GND, KSFO_TWR];
+            if monitored_freqs.contains(&active_freq) {
+                let redirect_msg = match expected_freq {
+                    KSFO_GND => format!(
+                        "{} {}, you are on Tower frequency, contact Ground on {:.3}.",
+                        self.aircraft_type,
+                        self.callsign,
+                        KSFO_GND as f64 / 1_000_000.0
+                    ),
+                    KSFO_TWR => format!(
+                        "{} {}, you are on Ground frequency, contact Tower on {:.3}.",
+                        self.aircraft_type,
+                        self.callsign,
+                        KSFO_TWR as f64 / 1_000_000.0
+                    ),
+                    _ => "(RADIO REDIRECT)".to_string(),
+                };
+                return Ok((Some(redirect_msg), vec![]));
+            }
+
+            // Radio Silence: If not on a monitored frequency, return None.
+            return Ok((None, vec![]));
+        }
+
         // Add pilot message to history
         self.conversation_history.push(ConversationEntry {
             speaker: Speaker::Pilot,
@@ -225,7 +292,16 @@ Supported commands:
             format!("{system_prompt}\n\nCONVERSATION:\n{history}\nPILOT: {pilot_message}\nATC:",);
 
         // Get LLM response
-        let raw_response = self.ollama.generate(&full_prompt).await?;
+        let raw_response = match &self.backend {
+            Backend::Ollama(ollama) => ollama
+                .generate(&full_prompt)
+                .await
+                .map_err(|e| e.to_string())?,
+            Backend::BitNet(bitnet) => bitnet
+                .generate(&full_prompt)
+                .await
+                .map_err(|e| e.to_string())?,
+        };
         let (speech_text, commands) = self.parse_response(&raw_response);
 
         // Add ATC response to history
@@ -240,7 +316,7 @@ Supported commands:
             self.conversation_history.drain(0..2);
         }
 
-        Ok((speech_text, commands))
+        Ok((Some(speech_text), commands))
     }
 
     pub fn parse_response(&self, raw: &str) -> (String, Vec<Command>) {
@@ -322,8 +398,50 @@ Supported commands:
         &self.conversation_history
     }
 
-    /// Clear conversation history
     pub fn clear_history(&mut self) {
         self.conversation_history.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::telemetry::Telemetry;
+
+    #[tokio::test]
+    async fn test_radio_frequency_enforcement() {
+        let mut engine = AtcEngine::new("N172SP", "C172");
+        let mut telemetry = Telemetry::default();
+
+        // At parked state, expected is GND (121.80)
+        // Tune to a random unmonitored frequency (e.g. 118.5)
+        telemetry.radios.com1_hz = 118500;
+
+        let (response, _) = engine
+            .process_pilot_input("Request taxi", &telemetry)
+            .await
+            .unwrap();
+        // Should be total silence (None)
+        assert!(response.is_none());
+
+        // Tune to Tower (Monitored but incorrect for Parked/GND)
+        telemetry.radios.com1_hz = KSFO_TWR;
+        let (response, _) = engine
+            .process_pilot_input("Request taxi", &telemetry)
+            .await
+            .unwrap();
+        // Should be a professional redirect
+        assert!(response.is_some());
+        assert!(response.unwrap().contains("contact Ground"));
+
+        // Tune to Ground (Correct)
+        telemetry.radios.com1_hz = KSFO_GND;
+        let (response, _) = engine
+            .process_pilot_input("Request taxi", &telemetry)
+            .await
+            .unwrap();
+        // Should be a normal response (Some)
+        assert!(response.is_some());
+        assert!(!response.unwrap().contains("contact Ground"));
     }
 }

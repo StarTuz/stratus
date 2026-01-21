@@ -12,8 +12,16 @@ pub enum OllamaError {
     RequestError(#[from] reqwest::Error),
     #[error("Ollama not running or model not loaded")]
     NotAvailable,
+    #[error("Inference failed: {0}")]
+    InferenceError(String),
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
+}
+
+impl From<String> for OllamaError {
+    fn from(s: String) -> Self {
+        OllamaError::InferenceError(s)
+    }
 }
 
 /// Request body for Ollama generate endpoint
@@ -23,6 +31,7 @@ struct GenerateRequest {
     prompt: String,
     stream: bool,
     options: GenerateOptions,
+    keep_alive: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +97,7 @@ impl OllamaClient {
                 temperature: 0.7,
                 num_predict: 256,
             },
+            keep_alive: "0s".to_string(), // Unload immediately after request for maximum efficiency
         };
 
         let response = self
