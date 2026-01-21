@@ -5,19 +5,11 @@
 use crate::commands::Command;
 use crate::ollama::OllamaClient;
 use crate::telemetry::Telemetry;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 use stratus_bitnet::BitNetClient;
-
-static COMMAND_REGEX: OnceLock<Regex> = OnceLock::new();
 
 const KSFO_GND: i32 = 121800; // 121.80 MHz
 const KSFO_TWR: i32 = 120500; // 120.50 MHz
-
-fn get_command_regex() -> &'static Regex {
-    COMMAND_REGEX.get_or_init(|| Regex::new(r"\[([A-Z_]+)\s+(.+?)\]").unwrap())
-}
 
 /// Parse a frequency string into Hz (i32).
 /// Handles multiple formats:
@@ -113,24 +105,29 @@ impl VfrState {
 
 impl AtcEngine {
     /// Create a new ATC engine
-    pub fn new(callsign: impl Into<String>, aircraft_type: impl Into<String>) -> Self {
-        // Default to BitNet for efficiency if available, or fallback to Ollama if explicitly configured
-        let backend = match BitNetClient::new() {
-            Ok(client) => Backend::BitNet(client),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize BitNet backend: {}. Falling back to Ollama.",
-                    e
-                );
-                Backend::Ollama(OllamaClient::default())
-            }
+    pub fn new(config: &crate::config::StratusConfig) -> Self {
+        // Initialize backend based on config
+        let backend = match config.model.backend.as_str() {
+            "BitNet" => match BitNetClient::new() {
+                Ok(client) => Backend::BitNet(client),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to initialize BitNet backend: {}. Falling back to Ollama.",
+                        e
+                    );
+                    Backend::Ollama(
+                        OllamaClient::new(&config.model.name).with_url(&config.model.url),
+                    )
+                }
+            },
+            _ => Backend::Ollama(OllamaClient::new(&config.model.name).with_url(&config.model.url)),
         };
 
         Self {
             backend,
             conversation_history: Vec::new(),
-            callsign: callsign.into(),
-            aircraft_type: aircraft_type.into(),
+            callsign: config.aircraft.callsign.clone(),
+            aircraft_type: config.aircraft.aircraft_type.clone(),
             state: VfrState::Parked,
         }
     }
@@ -320,53 +317,53 @@ Supported commands:
     }
 
     pub fn parse_response(&self, raw: &str) -> (String, Vec<Command>) {
-        let regex = get_command_regex();
         let mut commands = Vec::new();
         let mut clean_text = raw.to_string();
 
-        // Extract commands
-        for cap in regex.captures_iter(raw) {
-            let full_match = &cap[0]; // e.g., [SET_RADIO COM1 123.4]
-            let op = &cap[1]; // SET_RADIO
-            let args_str = &cap[2]; // COM1 123.4
+        let mut start_idx = 0;
+        while let Some(open_bracket) = raw[start_idx..].find('[') {
+            let abs_open = start_idx + open_bracket;
+            if let Some(close_bracket) = raw[abs_open..].find(']') {
+                let abs_close = abs_open + close_bracket;
+                let full_cmd = &raw[abs_open..=abs_close];
+                let content = &raw[abs_open + 1..abs_close];
 
-            // Remove from text
-            clean_text = clean_text.replace(full_match, "");
+                // Split into operator and arguments
+                let mut parts = content.split_whitespace();
+                if let Some(op) = parts.next() {
+                    let args: Vec<&str> = parts.collect();
 
-            // Parse Command
-            // This is a naive parser, assuming LLM follows format closely.
-            // Ideally we'd use a robust parser or grammar.
-            let parts: Vec<&str> = args_str.split_whitespace().collect();
+                    let command = match op {
+                        "SET_RADIO" if args.len() >= 3 => {
+                            let val = parse_frequency(args[2]);
+                            Some(Command::SetRadio {
+                                target: args[0].to_string(),
+                                param: args[1].to_string(),
+                                value: val,
+                            })
+                        }
+                        "SET_XPDR" if !args.is_empty() => {
+                            let code = args[0].parse::<i32>().unwrap_or(1200);
+                            Some(Command::SetXpdr { code, mode: None })
+                        }
+                        "SET_AP" if args.len() >= 2 => {
+                            let val = args[1].parse::<f32>().unwrap_or(0.0);
+                            Some(Command::SetAp {
+                                mode: args[0].to_string(),
+                                value: val,
+                            })
+                        }
+                        _ => None,
+                    };
 
-            let command = match op {
-                "SET_RADIO" if parts.len() >= 3 => {
-                    // Parse frequency value, handling both formats:
-                    // - Integer Hz: 118500 (already correct)
-                    // - Decimal MHz: 118.5 or 118.50 or 118.500
-                    let val_str = parts[2];
-                    let val = parse_frequency(val_str);
-                    Some(Command::SetRadio {
-                        target: parts[0].to_string(),
-                        param: parts[1].to_string(),
-                        value: val,
-                    })
+                    if let Some(cmd) = command {
+                        commands.push(cmd);
+                        clean_text = clean_text.replace(full_cmd, "");
+                    }
                 }
-                "SET_XPDR" if parts.len() >= 1 => {
-                    let code = parts[0].parse::<i32>().unwrap_or(1200);
-                    Some(Command::SetXpdr { code, mode: None })
-                }
-                "SET_AP" if parts.len() >= 2 => {
-                    let val = parts[1].parse::<f32>().unwrap_or(0.0);
-                    Some(Command::SetAp {
-                        mode: parts[0].to_string(),
-                        value: val,
-                    })
-                }
-                _ => None,
-            };
-
-            if let Some(cmd) = command {
-                commands.push(cmd);
+                start_idx = abs_close + 1;
+            } else {
+                break;
             }
         }
 
@@ -406,11 +403,13 @@ Supported commands:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::StratusConfig;
     use crate::telemetry::Telemetry;
 
     #[tokio::test]
     async fn test_radio_frequency_enforcement() {
-        let mut engine = AtcEngine::new("N172SP", "C172");
+        let config = StratusConfig::default();
+        let mut engine = AtcEngine::new(&config);
         let mut telemetry = Telemetry::default();
 
         // At parked state, expected is GND (121.80)

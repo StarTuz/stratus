@@ -9,6 +9,7 @@
 
 pub mod atc;
 pub mod commands;
+pub mod config;
 pub mod ollama;
 #[cfg(target_os = "linux")]
 pub mod speech;
@@ -24,6 +25,7 @@ mod commands_tests;
 
 // Re-export common types
 pub use atc::AtcEngine;
+pub use config::StratusConfig;
 pub use ollama::OllamaClient;
 pub use streaming::{StreamChunk, StreamingOllama};
 pub use telemetry::{Telemetry, TelemetryWatcher};

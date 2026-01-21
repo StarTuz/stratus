@@ -8,7 +8,8 @@ mod atc_tests {
     use super::*;
 
     fn make_engine() -> AtcEngine {
-        AtcEngine::new("N12345", "C172")
+        let config = crate::config::StratusConfig::default();
+        AtcEngine::new(&config)
     }
 
     #[test]
@@ -104,5 +105,25 @@ mod atc_tests {
             }
             _ => panic!("Expected SetRadio command"),
         }
+    }
+
+    #[test]
+    fn test_parse_robustness_whitespace() {
+        let engine = make_engine();
+        let raw = "[  SET_RADIO   COM1   FREQUENCY   121.8  ]";
+        let (_, commands) = engine.parse_response(raw);
+        assert_eq!(commands.len(), 1);
+        if let Command::SetRadio { value, .. } = &commands[0] {
+            assert_eq!(*value, 121800);
+        }
+    }
+
+    #[test]
+    fn test_parse_robustness_trailing_text() {
+        let engine = make_engine();
+        let raw = "[SET_XPDR 1200]and some text";
+        let (speech, commands) = engine.parse_response(raw);
+        assert_eq!(commands.len(), 1);
+        assert_eq!(speech, "and some text");
     }
 }

@@ -173,7 +173,11 @@ async fn run_scenario(
         scenario.meta.id, scenario.meta.description
     );
 
-    let mut engine = AtcEngine::new(&scenario.context.aircraft, "C172");
+    let mut config = stratus_core::config::StratusConfig::default();
+    config.aircraft.callsign = scenario.context.aircraft.clone();
+    config.aircraft.aircraft_type = "C172".to_string(); // Default for eval
+
+    let mut engine = AtcEngine::new(&config);
 
     // Scenarios starting with "BIT-" specifically test the native BitNet backend
     if !scenario.meta.id.starts_with("BIT-") {
@@ -220,9 +224,14 @@ async fn run_scenario(
                         match exp.kind.as_str() {
                             "regex" => {
                                 let re = Regex::new(&exp.value)?;
-                                if !re.is_match(&response.to_uppercase()) {
+                                if !re.is_match(
+                                    &response
+                                        .as_ref()
+                                        .map(|s| s.to_uppercase())
+                                        .unwrap_or_default(),
+                                ) {
                                     error!(
-                                        "  FAIL: [{}] Regex '{}' not found in response: '{}'",
+                                        "  FAIL: [{}] Regex '{}' not found in response: '{:?}'",
                                         exp.severity, exp.value, response
                                     );
                                     scenario_ok = false;
@@ -247,7 +256,7 @@ async fn run_scenario(
                                     .evaluate(
                                         &state_debug,
                                         &step.input_voice,
-                                        &response,
+                                        response.as_deref().unwrap_or(""),
                                         &exp.value,
                                     )
                                     .await

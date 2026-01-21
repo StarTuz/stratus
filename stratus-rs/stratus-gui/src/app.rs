@@ -10,7 +10,8 @@ use iced::{stream, time, Element, Length, Subscription, Task, Theme};
 use std::path::PathBuf;
 use std::time::Duration;
 use stratus_core::{
-    atc::AtcEngine, commands::CommandWriter, speech::SpeechProxy, voice, Telemetry, WarmupService,
+    atc::AtcEngine, commands::CommandWriter, config::StratusConfig, speech::SpeechProxy, voice,
+    Telemetry, WarmupService,
 };
 
 /// Main application state
@@ -32,6 +33,7 @@ pub struct StratusApp {
     pending_prompt: Option<String>,
     #[cfg(target_os = "linux")]
     speech: Option<SpeechProxy<'static>>,
+    config: StratusConfig,
 
     // Paths
     data_dir: PathBuf,
@@ -86,8 +88,9 @@ impl StratusApp {
     /// Create new application with initial state
     pub fn new() -> (Self, Task<Message>) {
         let data_dir = Self::get_data_dir();
+        let config = StratusConfig::load().unwrap_or_default();
 
-        let atc_engine = AtcEngine::new("N172SP", "C172"); // Default callsign
+        let atc_engine = AtcEngine::new(&config);
         let cmd_writer = CommandWriter::new(data_dir.join("stratus_commands.jsonl"));
 
         let warmup = WarmupService::default();
@@ -112,6 +115,7 @@ impl StratusApp {
             data_dir,
             #[cfg(target_os = "linux")]
             speech: None,
+            config,
         };
 
         // Initial tasks
