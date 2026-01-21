@@ -1,99 +1,50 @@
-# Stratus Offline ATC: Evaluation vs Real Life ATC
+# Market Analysis & Gap Evaluation
 
-## Overview Comparison
+**Date:** January 2026
+**Topic:** SayIntentions vs. Stratus ATC (Product Viability)
 
-| Aspect | Real Life ATC | Stratus Offline |
-|:-------|:--------------|:----------------|
-| Audio Quality | Human voice, radio static | AI TTS, clear audio |
-| Response Time | Instant (human) | 1-5 sec (LLM inference) |
-| Phraseology | FAA standard | FAA-based with AI interpretation |
-| Contextual Awareness | Full situational awareness | Telemetry-based context |
-| Multi-aircraft | Full traffic management | Single-pilot focus |
+## 1. Market Benchmark: SayIntentions
 
----
+Analysis of the X-Plane community sentiment (Source: [X-Plane.org Forum Thread 317846](https://forums.x-plane.org/forums/topic/317846-xplane12-sayintentions-atc/)) reveals the current gold standard for AI ATC.
 
-## Phraseology Accuracy
+### Key Strengths (User Expectations)
 
-### Real Life ATC
+* **Speech Freedom:** Users value "non-scripted" interactions.
+* **VFR Perfection:** It is considered the gold standard for VFR, handling the ambiguity of visual flight well.
+* **Immersion Features:** Includes "Entourage" (cabin crew, dispatch) and background chatter.
+* **Pro-Mode:** A strict mode for serious simmers that penalizes incorrect phraseology, separating "gamers" from "pilots."
 
-- Mandatory FAA phraseology
-- Regional variations exist
-- Readback requirements
-- Non-standard situations handled dynamically
+### Key Weaknesses (Opportunity)
 
-### Stratus Offline
+* **Cost:** ~$150/year subscription is a major friction point.
+* **Online Only:** Relies on cloud servers; latency was historically an issue.
+* **Platform Bias:** Perceived neglect of X-Plane / Linux in favor of MSFS/Windows.
 
-- **Strengths**:
-  - Correct ground/tower/approach facility identification
-  - Proper altitude and heading readbacks
-  - VFR pattern calls (downwind, base, final)
-- **Limitations**:
-  - May occasionally deviate from strict phraseology
-  - Limited emergency procedure handling
-  - No readback verification
+## 2. Technical Gap Analysis: Stratus (Current)
 
----
+Comparing our current codebase against these expectations reveals Stratus is a **Prototype**, not a Product.
 
-## Current Feature Comparison
+### Critical Deficiencies
 
-| Feature | Stratus Offline | Notes |
-|:--------|:----------------|:------|
-| VFR Tower | ✅ | Taxi, takeoff, pattern work |
-| VFR Ground | ✅ | Taxi clearances |
-| VFR Approach | ⚠️ | Basic flight following |
-| IFR Clearance | ❌ | Not implemented |
-| ATIS | ❌ | Planned |
-| Emergency | ⚠️ | Basic "say intentions" |
-| Position Reports | ✅ | Contextual based on telemetry |
-| Traffic Advisories | ❌ | No traffic injection |
+| Feature | Market Standard | Stratus Current Implementation | Severity |
+| :--- | :--- | :--- | :--- |
+| **State Tracking** | **Stateful**: aware of "Cleared to Land," traffic sequencing, and airspace transitions. | **Stateless**: `stratus-core/src/atc.rs` relies entirely on LLM context window. No persistent rigid state. | 🔴 **CRITICAL** |
+| **Voice Quality** | **Neural/Cloud**: Indistinguishable from human. | **Local**: `speech-dispatcher` is robotic/functional. | 🟡 HIGH |
+| **Logic** | **Hybrid**: LLM for chat + Rigid Logic for safety/rules. | **Pure LLM**: "Hallucination-prone." No guardrails ensuring FAA 7110.65 compliance. | 🔴 **CRITICAL** |
+| **Scope** | IFR + VFR + Ground + Emergency | VFR Pattern (Basic) | 🟡 MEDIUM |
 
----
+### VFR Viability
 
-## Unique Advantages
+* **Current Status**: The VFR logic is currently "fragile." It can handle a basic "pattern" request but lacks the capability to manage:
+  * Traffic sequencing (no awareness of other planes).
+  * Airspace transitions (Class B/C/D boundaries).
+  * Complex taxi routing (no airport graph awareness).
 
-Stratus Offline offers unique benefits not available in other solutions:
+## 3. Conclusion
 
-| Advantage | Description |
-|:----------|:------------|
-| **Fully Offline** | No internet required after initial setup |
-| **No Subscription** | Open source, free forever |
-| **Privacy First** | Audio never leaves your machine |
-| **Linux Native** | First-class Linux support |
-| **Customizable** | Modify prompts, add features |
-| **Self-Hosted** | Run your own LLM models |
+Stratus excels in **Privacy** (Local), **Cost** (Free), and **OS Support** (Linux), but fails to meet the **Functional Baseline** required for a general release.
 
----
+**Recommendation**: Do NOT package. Focus development on:
 
-## Roadmap to Parity
-
-To achieve feature completeness, Stratus needs:
-
-### High Priority
-
-1. **ATIS Generation** - Weather-based ATIS playback
-2. **IFR Clearances** - Departure/arrival procedures
-3. **Frequency Validation** - ATC silence on wrong freq
-
-### Medium Priority
-
-1. **Traffic Advisories** - Integration with traffic plugins
-2. **Emergency Handling** - Proper 7700 response
-3. **Multiple Facility Types** - Center, TRACON
-
-### Future
-
-1. **Voice Cloning** - Regional ATC accents
-2. **AI Traffic Integration** - Coordinated traffic calls
-
----
-
-## Conclusion
-
-**Stratus Offline ATC** is currently best suited for:
-
-- Casual VFR practice
-- Pattern work training
-- Radio communication familiarization
-- Linux/privacy-focused users
-
-For realistic IFR training, additional development is needed. However, the open source nature allows the community to contribute and extend functionality.
+1. **State Machine**: Implement a rigid Rust-based state machine (Ground -> Takeoff -> Pattern -> Landing) to guide the LLM.
+2. **Context Injection**: Feed the LLM specific valid states rather than open-ended prompts.

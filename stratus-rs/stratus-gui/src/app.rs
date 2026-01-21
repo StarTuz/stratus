@@ -2,13 +2,17 @@
 //!
 //! Elm-style architecture with Message passing.
 
+use iced::futures::{SinkExt, StreamExt};
 use iced::widget::{
     column, container, horizontal_space, row, scrollable, text, text_input, Column,
 };
-use iced::{time, Element, Length, Subscription, Task, Theme};
+use iced::{stream, time, Element, Length, Subscription, Task, Theme};
 use std::path::PathBuf;
 use std::time::Duration;
-use stratus_core::Telemetry;
+use stratus_core::{
+    atc::AtcEngine, commands::CommandWriter, speech::SpeechProxy, voice, Telemetry, WarmupService,
+};
+use tokio_stream::wrappers::ReceiverStream;
 
 /// Main application state
 pub struct StratusApp {
@@ -21,6 +25,14 @@ pub struct StratusApp {
     connected: bool,
     last_telemetry_time: std::time::Instant,
     ollama_status: OllamaStatus,
+
+    // Services
+    atc_engine: AtcEngine,
+    cmd_writer: CommandWriter,
+    warmup: WarmupService,
+    pending_prompt: Option<String>,
+    #[cfg(target_os = "linux")]
+    speech: Option<SpeechProxy<'static>>,
 
     // Paths
     data_dir: PathBuf,
@@ -50,6 +62,21 @@ pub enum Message {
     // Background events
     TelemetryUpdated(Result<Telemetry, String>),
     OllamaStatusChanged(bool),
+    #[cfg(target_os = "linux")]
+    SpeechConnected(Result<SpeechProxy<'static>, String>),
+    VoiceSignalReceived(String),
+    // Processing results
+    ProcessingFinished(
+        Result<
+            (
+                AtcEngine,
+                String,
+                String,
+                Vec<stratus_core::commands::Command>,
+            ),
+            String,
+        >,
+    ), // engine, pilot_msg, atc_msg, commands
 
     // System
     Tick,
@@ -61,22 +88,43 @@ impl StratusApp {
     pub fn new() -> (Self, Task<Message>) {
         let data_dir = Self::get_data_dir();
 
+        let atc_engine = AtcEngine::new("N172SP", "C172"); // Default callsign
+        let cmd_writer = CommandWriter::new(data_dir.join("stratus_commands.jsonl"));
+
+        let warmup = WarmupService::default();
+
+        // Start warmup service
+        warmup.start();
+
         let app = Self {
             input_text: String::new(),
             comm_log: vec![CommEntry {
                 speaker: "SYSTEM".into(),
-                message: "Stratus ATC initialized. Waiting for X-Plane connection...".into(),
+                message: "Stratus ATC (Rust Core) initialized.".into(),
             }],
             telemetry: Telemetry::default(),
             connected: false,
             last_telemetry_time: std::time::Instant::now(),
             ollama_status: OllamaStatus::Unknown,
+            atc_engine,
+            cmd_writer,
+            warmup,
+            pending_prompt: None,
             data_dir,
+            #[cfg(target_os = "linux")]
+            speech: None,
         };
 
         // Initial tasks
         let check_ollama = Task::perform(check_ollama_available(), Message::OllamaStatusChanged);
 
+        #[cfg(target_os = "linux")]
+        let connect_speech = Task::perform(connect_speech(), Message::SpeechConnected);
+
+        #[cfg(target_os = "linux")]
+        return (app, Task::batch([check_ollama, connect_speech]));
+
+        #[cfg(not(target_os = "linux"))]
         (app, check_ollama)
     }
 
@@ -96,18 +144,102 @@ impl StratusApp {
             Message::SendMessage => {
                 if !self.input_text.trim().is_empty() {
                     let pilot_msg = self.input_text.clone();
-                    self.comm_log.push(CommEntry {
-                        speaker: "PILOT".into(),
-                        message: pilot_msg.clone(),
-                    });
                     self.input_text.clear();
 
-                    // TODO: Send to ATC engine (Phase 3)
-                    self.comm_log.push(CommEntry {
-                        speaker: "ATC".into(),
-                        message: format!("Roger, {}", pilot_msg),
-                    });
+                    // Route through VoiceSignal mechanism to unify logic
+                    return Task::done(Message::VoiceSignalReceived(pilot_msg));
                 }
+                Task::none()
+            }
+            Message::VoiceSignalReceived(text) => {
+                if text.trim().is_empty() {
+                    return Task::none();
+                }
+
+                // Add pilot message log
+                self.comm_log.push(CommEntry {
+                    speaker: "PILOT".into(),
+                    message: text.clone(),
+                });
+
+                self.comm_log.push(CommEntry {
+                    speaker: "ATC".into(),
+                    message: "Processing...".into(),
+                });
+
+                // Spawn ATC processing task
+                let mut engine = self.atc_engine.clone();
+                let telemetry = self.telemetry.clone();
+                let pilot_msg = text.clone();
+                let writer = self.cmd_writer.clone(); // Can we clone? CommandWriter needs Clone. It's just a PathBuf.
+
+                Task::perform(
+                    async move {
+                        // Process input
+                        let (response, commands) = engine
+                            .process_pilot_input(&pilot_msg, &telemetry)
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                        // Write commands SIDE EFFECT (or we return them to main thread to write?)
+                        // Main thread has cmd_writer access too. But we can write here if we clone writer.
+                        // Let's return commands to valid Elm architecture?
+                        // Actually executing side effects in Task is fine.
+
+                        // Write commands
+                        if !commands.is_empty() {
+                            // We need CommandWriter to be passed in or just use path provided?
+                            // CommandWriter is just a wrapper around PathBuf.
+                            // Assuming we can instantiate or just write manually?
+                            // Better: return commands and let update handle writing.
+                        }
+
+                        Ok((engine, pilot_msg, response, commands))
+                    },
+                    Message::ProcessingFinished,
+                )
+            }
+            Message::ProcessingFinished(result) => {
+                match result {
+                    Ok((new_engine, _pilot, response, commands)) => {
+                        self.atc_engine = new_engine;
+
+                        // Update log with real response
+                        if let Some(last) = self.comm_log.last_mut() {
+                            if last.speaker == "ATC" {
+                                last.message = response.clone();
+                            }
+                        }
+
+                        // Execute Commands
+                        if !commands.is_empty() {
+                            if let Err(e) = self.cmd_writer.write(&commands) {
+                                eprintln!("Failed to write commands: {}", e);
+                            }
+                        }
+
+                        // Speak response
+                        #[cfg(target_os = "linux")]
+                        if let Some(client) = &self.speech {
+                            let t = response.clone();
+                            let c = client.clone();
+                            return Task::perform(
+                                async move {
+                                    let _ = c.speak(&t).await;
+                                },
+                                |_| Message::Tick,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        if let Some(last) = self.comm_log.last_mut() {
+                            if last.speaker == "ATC" {
+                                last.message = format!("[Error: {}]", e);
+                            }
+                        }
+                    }
+                }
+
                 Task::none()
             }
             Message::TelemetryUpdated(result) => {
@@ -142,6 +274,13 @@ impl StratusApp {
             Message::CheckOllama => {
                 Task::perform(check_ollama_available(), Message::OllamaStatusChanged)
             }
+            #[cfg(target_os = "linux")]
+            Message::SpeechConnected(result) => {
+                if let Ok(proxy) = result {
+                    self.speech = Some(proxy);
+                }
+                Task::none()
+            }
         }
     }
 
@@ -174,15 +313,29 @@ impl StratusApp {
             OllamaStatus::Unknown => text("? Checking Ollama...").color([0.6, 0.6, 0.6]),
         };
 
-        row![
+        let header_row = row![
             text("STRATUS ATC").size(24),
             horizontal_space(),
             status_text,
             text(" | "),
             ollama_text,
         ]
-        .spacing(10)
-        .into()
+        .spacing(10);
+
+        // Add warmup status indicator
+        let warmup_status = if self.warmup.is_running() {
+            if self.warmup.is_paused() {
+                text("🔥 Warmup Paused").size(12).color([0.9, 0.9, 0.3])
+            } else {
+                text("🔥 Warmup Active").size(12).color([0.3, 0.9, 0.3])
+            }
+        } else {
+            text("❄ Warmup Stopped").size(12).color([0.6, 0.6, 0.6])
+        };
+
+        column![header_row, row![horizontal_space(), warmup_status]]
+            .spacing(5)
+            .into()
     }
 
     fn view_main(&self) -> Element<'_, Message> {
@@ -259,7 +412,7 @@ impl StratusApp {
         row![
             text(format!("Position: {:.4}°, {:.4}°", lat, lon)).size(12),
             horizontal_space(),
-            text("Stratus ATC v0.1.0").size(12),
+            text("Stratus ATC v0.2.0 (Rust)").size(12),
         ]
         .into()
     }
@@ -277,7 +430,30 @@ impl StratusApp {
         // Check Ollama every 10 seconds
         let ollama_check = time::every(Duration::from_secs(10)).map(|_| Message::CheckOllama);
 
-        Subscription::batch([telemetry_tick, ollama_check])
+        let mut subs = vec![telemetry_tick, ollama_check];
+
+        // Listen for Voice Signals
+        #[cfg(target_os = "linux")]
+        {
+            let voice_sub = Subscription::run(|| {
+                stream::channel(100, |mut output| async move {
+                    match voice::speech_stream().await {
+                        Ok(mut stream) => {
+                            while let Some(text) = stream.next().await {
+                                let _ = output.send(Message::VoiceSignalReceived(text)).await;
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Voice stream error: {}", e);
+                        }
+                    }
+                    std::future::pending().await
+                })
+            });
+            subs.push(voice_sub);
+        }
+
+        Subscription::batch(subs)
     }
 }
 
@@ -296,4 +472,11 @@ async fn check_ollama_available() -> bool {
         .await
         .map(|r| r.status().is_success())
         .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+async fn connect_speech() -> Result<SpeechProxy<'static>, String> {
+    stratus_core::speech::connect()
+        .await
+        .map_err(|e| e.to_string())
 }

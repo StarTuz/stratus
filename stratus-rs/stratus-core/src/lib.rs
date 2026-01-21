@@ -8,14 +8,23 @@
 //! - ATC: Prompt building and response parsing
 
 pub mod atc;
+pub mod commands;
 pub mod ollama;
-pub mod telemetry;
+#[cfg(target_os = "linux")]
+pub mod speech;
 pub mod streaming;
+pub mod telemetry;
+pub mod voice;
 pub mod warmup;
+
+#[cfg(test)]
+mod atc_tests;
+#[cfg(test)]
+mod commands_tests;
 
 // Re-export common types
 pub use atc::AtcEngine;
 pub use ollama::OllamaClient;
-pub use telemetry::{TelemetryWatcher, Telemetry};
 pub use streaming::{StreamChunk, StreamingOllama};
+pub use telemetry::{Telemetry, TelemetryWatcher};
 pub use warmup::{WarmupConfig, WarmupService};

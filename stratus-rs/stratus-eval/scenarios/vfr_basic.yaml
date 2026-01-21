@@ -1,0 +1,92 @@
+meta:
+  id: "VFR-001"
+  description: "Basic VFR Departure to Pattern"
+
+context:
+  airport: "KSFO"
+  aircraft: "N172SP (Cessna 172)"
+
+steps:
+  - id: 1
+    action: "Initial Contact (Taxi)"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 5.0
+      alt_agl_ft: 0.0
+    input_voice: "San Francisco Tower, Skyhawk 172SP, request taxi for pattern work."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, taxi to runway 28L via Alpha Bravo."
+    expectations:
+      - type: regex
+        value: "TAXI TO RUNWAY 28L"
+        severity: critical
+      - type: state
+        value: "Taxiing"
+        severity: warning
+
+  - id: 2
+    action: "Ready for Takeoff (Hold Short)"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 0.0
+      alt_agl_ft: 0.0
+    input_voice: "San Francisco Tower, Skyhawk 172SP, holding short runway 28L, ready for takeoff."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Runway 28L, Cleared for Takeoff, Make Left Traffic."
+    expectations:
+      - type: regex
+        value: "CLEARED FOR TAKEOFF"
+        severity: critical
+      - type: state
+        value: "HoldingShort"
+        severity: warning
+
+  - id: 3
+    action: "Takeoff Roll"
+    telemetry:
+      on_ground: true
+      ground_speed_kts: 50.0 
+      alt_agl_ft: 0.0
+    input_voice: "" 
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "TakeoffRoll"
+        severity: warning
+
+  - id: 4
+    action: "Liftoff / Departure"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 75.0
+      alt_agl_ft: 150.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "Departure"
+        severity: warning
+
+  - id: 5
+    action: "Entering Crosswind"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 80.0
+      alt_agl_ft: 750.0
+    input_voice: ""
+    llm_mock_response: ""
+    expectations:
+      - type: state
+        value: "InPattern(Crosswind)"
+        severity: warning
+
+  - id: 6
+    action: "Downwind Leg"
+    telemetry:
+      on_ground: false
+      ground_speed_kts: 90.0
+      alt_agl_ft: 1000.0
+    input_voice: "Tower, Skyhawk 172SP, entering left downwind 28L."
+    llm_mock_response: "Skyhawk 172SP, San Francisco Tower, Report midfield downwind."
+    expectations:
+      - type: state
+        value: "InPattern(Downwind)"
+        severity: warning

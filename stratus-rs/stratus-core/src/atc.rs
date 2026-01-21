@@ -2,15 +2,46 @@
 //!
 //! Constructs context-aware prompts for the LLM based on telemetry.
 
+use crate::commands::Command;
 use crate::ollama::OllamaClient;
 use crate::telemetry::Telemetry;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+
+static COMMAND_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn get_command_regex() -> &'static Regex {
+    COMMAND_REGEX.get_or_init(|| Regex::new(r"\[([A-Z_]+)\s+(.+?)\]").unwrap())
+}
+
+/// Parse a frequency string into Hz (i32).
+/// Handles multiple formats:
+/// - "118500" -> 118500 (already Hz)
+/// - "118.5" -> 118500 (MHz with 1 decimal)
+/// - "118.50" -> 118500 (MHz with 2 decimals)
+/// - "118.500" -> 118500 (MHz with 3 decimals)
+fn parse_frequency(s: &str) -> i32 {
+    // If it contains a decimal point, it's in MHz format
+    if s.contains('.') {
+        if let Ok(mhz) = s.parse::<f64>() {
+            // Convert MHz to Hz (multiply by 1000)
+            // X-Plane uses kHz * 100 format: 118.500 MHz = 118500
+            return (mhz * 1000.0).round() as i32;
+        }
+    }
+    // Already in Hz format or fallback
+    s.parse::<i32>().unwrap_or(0)
+}
 
 /// ATC Engine - manages the conversation and prompt construction
+#[derive(Debug, Clone)]
 pub struct AtcEngine {
     ollama: OllamaClient,
     conversation_history: Vec<ConversationEntry>,
     callsign: String,
     aircraft_type: String,
+    state: VfrState,
 }
 
 #[derive(Debug, Clone)]
@@ -20,10 +51,54 @@ pub struct ConversationEntry {
     pub timestamp: i64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Speaker {
     Pilot,
     Atc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum VfrState {
+    Parked,
+    Taxiing,
+    HoldingShort,
+    TakeoffRoll,
+    Departure,
+    InPattern(PatternLeg),
+    Approach,
+    Landing,
+    ClearOfRunway,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum PatternLeg {
+    Upwind,
+    Crosswind,
+    Downwind,
+    Base,
+    Final,
+}
+
+impl VfrState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            VfrState::Parked => "Parked / At Gate",
+            VfrState::Taxiing => "Taxiing",
+            VfrState::HoldingShort => "Holding Short",
+            VfrState::TakeoffRoll => "Takeoff Roll",
+            VfrState::Departure => "Departure",
+            VfrState::InPattern(leg) => match leg {
+                PatternLeg::Upwind => "In Pattern (Upwind)",
+                PatternLeg::Crosswind => "In Pattern (Crosswind)",
+                PatternLeg::Downwind => "In Pattern (Downwind)",
+                PatternLeg::Base => "In Pattern (Base)",
+                PatternLeg::Final => "In Pattern (Final)",
+            },
+            VfrState::Approach => "On Approach",
+            VfrState::Landing => "Landing",
+            VfrState::ClearOfRunway => "Clear of Runway",
+        }
+    }
 }
 
 impl AtcEngine {
@@ -34,93 +109,194 @@ impl AtcEngine {
             conversation_history: Vec::new(),
             callsign: callsign.into(),
             aircraft_type: aircraft_type.into(),
+            state: VfrState::Parked,
         }
     }
-    
+
     /// Set the Ollama model
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.ollama = OllamaClient::new(model);
+        self.ollama = self.ollama.with_model(model);
         self
     }
-    
+
+    /// Set the Ollama URL
+    pub fn with_url(mut self, url: impl Into<String>) -> Self {
+        self.ollama = self.ollama.with_url(url);
+        self
+    }
+
     /// Build the ATC system prompt
     fn build_system_prompt(&self, telemetry: &Telemetry) -> String {
         let altitude_ft = (telemetry.position.altitude_msl_m * 3.28084) as i32;
         let heading = telemetry.orientation.heading_mag as i32;
         let ground_speed_kts = (telemetry.speed.ground_speed_mps * 1.94384) as i32;
-        
-        let phase = if telemetry.state.on_ground {
-            "on the ground"
-        } else if altitude_ft < 1000 {
-            "in the pattern"
-        } else {
-            "in flight"
-        };
-        
+
         format!(
             r#"You are an FAA Air Traffic Controller. Respond with proper ATC phraseology.
 
 AIRCRAFT: {callsign} ({aircraft_type})
-POSITION: {phase} at {altitude_ft} ft MSL, heading {heading}°, {ground_speed_kts} kts
+POSITION: {state} at {altitude_ft} ft MSL, heading {heading}°, {ground_speed_kts} kts
 SQUAWK: {squawk:04}
 
 RULES:
-1. Use standard FAA phraseology
-2. Be concise - real ATC is brief
-3. Include callsign in every transmission
-4. If unclear, ask pilot to "say again"
+1. Use standard FAA phraseology.
+2. Be concise - real ATC is brief.
+3. Include callsign in every transmission.
+4. If unclear, ask pilot to "say again".
+5. YOU ARE AWARE OF THE FLIGHT PHASE: {state}. Do not clear for takeoff if not at the runway. Do not clear for landing if not in the pattern.
 
-Respond ONLY with what ATC would say. No explanations."#,
+Respond using standard phraseology. You may append machine readable commands in brackets if necessary, e.g. [SET_RADIO COM1 120.5].
+Supported commands:
+- [SET_RADIO target param value] (e.g. [SET_RADIO COM1 FREQUENCY 118.5])
+- [SET_XPDR code] (e.g. [SET_XPDR 1200])
+- [SET_AP mode value] (e.g. [SET_AP ALT 5000])"#,
             callsign = self.callsign,
             aircraft_type = self.aircraft_type,
-            phase = phase,
+            state = self.state.as_str(),
             altitude_ft = altitude_ft,
             heading = heading,
             ground_speed_kts = ground_speed_kts,
             squawk = telemetry.transponder.code,
         )
     }
-    
+
+    /// Update the current flight state based on telemetry
+    pub fn update_state(&mut self, telemetry: &Telemetry) {
+        let speed_kts = (telemetry.speed.ground_speed_mps * 1.94384) as f32;
+        let alt_agl_ft = (telemetry.position.altitude_agl_m * 3.28084) as f32;
+        let on_ground = telemetry.state.on_ground;
+
+        let mut last_state = self.state;
+        loop {
+            self.state = match self.state {
+                VfrState::Parked if speed_kts > 2.0 && on_ground => VfrState::Taxiing,
+                VfrState::Taxiing if speed_kts < 1.0 && on_ground => VfrState::HoldingShort,
+                VfrState::Taxiing if speed_kts > 40.0 && on_ground => VfrState::TakeoffRoll, // Immediate takeoff
+                VfrState::HoldingShort if speed_kts > 5.0 && on_ground => VfrState::TakeoffRoll,
+                VfrState::TakeoffRoll if !on_ground => VfrState::Departure,
+                VfrState::Departure if alt_agl_ft > 300.0 => {
+                    VfrState::InPattern(PatternLeg::Upwind)
+                }
+                VfrState::InPattern(PatternLeg::Upwind) if alt_agl_ft > 700.0 => {
+                    VfrState::InPattern(PatternLeg::Crosswind)
+                }
+                VfrState::InPattern(PatternLeg::Crosswind) if alt_agl_ft > 900.0 => {
+                    VfrState::InPattern(PatternLeg::Downwind)
+                }
+                VfrState::InPattern(PatternLeg::Downwind)
+                    if speed_kts < 90.0 && alt_agl_ft < 1200.0 =>
+                {
+                    VfrState::Approach
+                }
+                VfrState::Approach if alt_agl_ft < 50.0 => VfrState::Landing,
+                VfrState::Landing if on_ground && speed_kts < 30.0 => VfrState::ClearOfRunway,
+                VfrState::ClearOfRunway if speed_kts < 2.0 => VfrState::Parked,
+                _ => self.state, // Stay in current state
+            };
+
+            if self.state == last_state {
+                break;
+            }
+            last_state = self.state;
+        }
+    }
+
     /// Process pilot input and generate ATC response
     pub async fn process_pilot_input(
         &mut self,
         pilot_message: &str,
         telemetry: &Telemetry,
-    ) -> Result<String, crate::ollama::OllamaError> {
+    ) -> Result<(String, Vec<Command>), crate::ollama::OllamaError> {
         // Add pilot message to history
         self.conversation_history.push(ConversationEntry {
             speaker: Speaker::Pilot,
             message: pilot_message.to_string(),
             timestamp: chrono::Utc::now().timestamp(),
         });
-        
+
+        // Update logical state from telemetry before building prompt
+        self.update_state(telemetry);
+
         // Build the full prompt
         let system_prompt = self.build_system_prompt(telemetry);
         let history = self.format_history();
-        
-        let full_prompt = format!(
-            "{system_prompt}\n\nCONVERSATION:\n{history}\nPILOT: {pilot_message}\nATC:",
-        );
-        
+
+        let full_prompt =
+            format!("{system_prompt}\n\nCONVERSATION:\n{history}\nPILOT: {pilot_message}\nATC:",);
+
         // Get LLM response
-        let response = self.ollama.generate(&full_prompt).await?;
-        let response = response.trim().to_string();
-        
+        let raw_response = self.ollama.generate(&full_prompt).await?;
+        let (speech_text, commands) = self.parse_response(&raw_response);
+
         // Add ATC response to history
         self.conversation_history.push(ConversationEntry {
             speaker: Speaker::Atc,
-            message: response.clone(),
+            message: speech_text.clone(),
             timestamp: chrono::Utc::now().timestamp(),
         });
-        
-        // Keep history manageable (last 10 exchanges)
+
+        // Keep history manageable
         if self.conversation_history.len() > 20 {
             self.conversation_history.drain(0..2);
         }
-        
-        Ok(response)
+
+        Ok((speech_text, commands))
     }
-    
+
+    pub fn parse_response(&self, raw: &str) -> (String, Vec<Command>) {
+        let regex = get_command_regex();
+        let mut commands = Vec::new();
+        let mut clean_text = raw.to_string();
+
+        // Extract commands
+        for cap in regex.captures_iter(raw) {
+            let full_match = &cap[0]; // e.g., [SET_RADIO COM1 123.4]
+            let op = &cap[1]; // SET_RADIO
+            let args_str = &cap[2]; // COM1 123.4
+
+            // Remove from text
+            clean_text = clean_text.replace(full_match, "");
+
+            // Parse Command
+            // This is a naive parser, assuming LLM follows format closely.
+            // Ideally we'd use a robust parser or grammar.
+            let parts: Vec<&str> = args_str.split_whitespace().collect();
+
+            let command = match op {
+                "SET_RADIO" if parts.len() >= 3 => {
+                    // Parse frequency value, handling both formats:
+                    // - Integer Hz: 118500 (already correct)
+                    // - Decimal MHz: 118.5 or 118.50 or 118.500
+                    let val_str = parts[2];
+                    let val = parse_frequency(val_str);
+                    Some(Command::SetRadio {
+                        target: parts[0].to_string(),
+                        param: parts[1].to_string(),
+                        value: val,
+                    })
+                }
+                "SET_XPDR" if parts.len() >= 1 => {
+                    let code = parts[0].parse::<i32>().unwrap_or(1200);
+                    Some(Command::SetXpdr { code, mode: None })
+                }
+                "SET_AP" if parts.len() >= 2 => {
+                    let val = parts[1].parse::<f32>().unwrap_or(0.0);
+                    Some(Command::SetAp {
+                        mode: parts[0].to_string(),
+                        value: val,
+                    })
+                }
+                _ => None,
+            };
+
+            if let Some(cmd) = command {
+                commands.push(cmd);
+            }
+        }
+
+        (clean_text.trim().to_string(), commands)
+    }
+
     /// Format conversation history for the prompt
     fn format_history(&self) -> String {
         self.conversation_history
@@ -135,12 +311,17 @@ Respond ONLY with what ATC would say. No explanations."#,
             .collect::<Vec<_>>()
             .join("\n")
     }
-    
+
+    /// Get current VFR state
+    pub fn state(&self) -> VfrState {
+        self.state
+    }
+
     /// Get conversation history
     pub fn history(&self) -> &[ConversationEntry] {
         &self.conversation_history
     }
-    
+
     /// Clear conversation history
     pub fn clear_history(&mut self) {
         self.conversation_history.clear();

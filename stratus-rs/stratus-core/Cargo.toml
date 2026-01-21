@@ -18,7 +18,12 @@ anyhow.workspace = true
 chrono = "0.4"
 dirs = "6"
 futures-util = "0.3"
+regex = "1.12.2"
+nix = { version = "0.30.1", features = ["fs"] }
 
 # Platform-specific
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus.workspace = true
+
+[dev-dependencies]
+tempfile = "3.24.0"

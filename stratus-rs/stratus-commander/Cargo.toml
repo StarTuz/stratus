@@ -1,0 +1,23 @@
+[package]
+name = "stratus-commander"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# File System & IPC
+nix = { version = "0.27", features = ["fs", "term"] }
+
+# X-Plane SDK Bindings
+xplm = "0.3.0"
+
+# Logging & Errors
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.10"
+
+[lib]
+crate-type = ["rlib", "cdylib"]

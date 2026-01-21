@@ -42,6 +42,7 @@ struct StreamLine {
 struct GenerateRequest {
     model: String,
     prompt: String,
+    system: String,
     stream: bool,
     options: GenerateOptions,
 }
@@ -52,13 +53,36 @@ struct GenerateOptions {
     num_predict: i32,
 }
 
+use std::hash::{Hash, Hasher};
+
 /// Streaming Ollama client for low-latency ATC responses
+#[derive(Clone, Debug)]
 pub struct StreamingOllama {
     client: Client,
     base_url: String,
     model: String,
     min_chunk_chars: usize,
     max_chunk_chars: usize,
+}
+
+impl PartialEq for StreamingOllama {
+    fn eq(&self, other: &Self) -> bool {
+        self.base_url == other.base_url
+            && self.model == other.model
+            && self.min_chunk_chars == other.min_chunk_chars
+            && self.max_chunk_chars == other.max_chunk_chars
+    }
+}
+
+impl Eq for StreamingOllama {}
+
+impl Hash for StreamingOllama {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.base_url.hash(state);
+        self.model.hash(state);
+        self.min_chunk_chars.hash(state);
+        self.max_chunk_chars.hash(state);
+    }
 }
 
 impl StreamingOllama {
@@ -106,12 +130,19 @@ impl StreamingOllama {
     ) -> Result<mpsc::Receiver<StreamChunk>, StreamError> {
         let (tx, rx) = mpsc::channel(32);
 
+        let system_prompt = "You are Stratus, an expert US Air Traffic Controller (TRACON). \
+        You communicate using strict FAA Order 7110.65 phraseology. \
+        You are concise, professional, and authoritative. \
+        Do not act as a conversational assistant. Only provide ATC instructions. \
+        Your output must be suitable for Text-to-Speech.";
+
         let request = GenerateRequest {
             model: self.model.clone(),
             prompt: prompt.to_string(),
+            system: system_prompt.to_string(),
             stream: true,
             options: GenerateOptions {
-                temperature: 0.7,
+                temperature: 0.3, // Lower temperature for more deterministic/professional output
                 num_predict: 256,
             },
         };
