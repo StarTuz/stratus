@@ -1,3 +1,6 @@
+// Voice pipeline runs on a single thread; some types (Vad, WhisperTranscriber) are !Send/!Sync.
+#![allow(clippy::arc_with_non_send_sync)]
+
 mod audio_capture;
 mod config;
 mod ptt_hook;

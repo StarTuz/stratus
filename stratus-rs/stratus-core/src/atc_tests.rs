@@ -4,7 +4,7 @@ use crate::atc::AtcEngine;
 use crate::commands::Command;
 
 #[cfg(test)]
-mod atc_tests {
+mod tests {
     use super::*;
 
     fn make_engine() -> AtcEngine {

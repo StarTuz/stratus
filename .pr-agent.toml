@@ -1,0 +1,41 @@
+# Qodo PR Agent — https://github.com/qodo-ai/pr-agent
+# Exclude large/binary and non-reviewable files so the AI stays within token limits.
+
+[config]
+ignore_pr_source_files = [
+    # Compiled output & packages
+    "*.pdf",
+    "*.exe",
+    "*.msi",
+    "*.dmg",
+    "*.AppImage",
+    "*.tar.gz",
+    "*.xpl",
+    # Image assets
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.svg",
+    "*.ico",
+    "*.webp",
+    # Lock file (noise, no review value)
+    "Cargo.lock",
+]
+
+[pr_reviewer]
+# Stratus: Rust workspace (stratus-core, stratus-gui, stratus-voice, stratus-commander, stratus-eval, stratus-bitnet).
+# Focus on ATC/sim safety, correctness, and Rust quality.
+extra_instructions = """
+This is the Stratus ATC project: a Rust workspace for local AI ATC (X-Plane 12, Linux-first).
+Focus review on:
+- Correctness of unsafe or FFI code (stratus-commander C interface, raw pointers)
+- ATC logic and state machine (stratus-core/atc.rs): phraseology, flight phase, command parsing
+- Safety: GUARDRAILS.md rules (no-touch zones, LLM validation, telemetry validation)
+- Concurrency and D-Bus usage (stratus-voice, stratus-gui)
+- Test and scenario coverage for new ATC or core behaviour
+- Rust idioms and Clippy-clean patterns (we run clippy -D warnings in CI)
+"""
+
+[pr_description]
+# Auto-generate PR descriptions using conventional commit style.
+extra_instructions = "Follow conventional commits: feat:, fix:, perf:, test:, docs:, refactor:, ci:"

@@ -1,0 +1,122 @@
+# Stratus ATC — Continuous Integration
+# Top-tier quality: every push/PR must pass build, test, fmt, clippy, and scenario regression.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # --- Quality: format and lint (fast feedback) ---
+  check:
+    name: Check (fmt + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            stratus-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('stratus-rs/Cargo.lock', 'stratus-rs/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        working-directory: stratus-rs
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: stratus-rs
+
+  # --- Build and unit tests ---
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            stratus-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('stratus-rs/Cargo.lock', 'stratus-rs/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build (release)
+        run: cargo build --release
+        working-directory: stratus-rs
+
+      - name: Unit tests
+        run: cargo test
+        working-directory: stratus-rs
+
+  # --- Scenario regression (mock-only; no Ollama/Judge) ---
+  eval:
+    name: Scenario regression (mock-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            stratus-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('stratus-rs/Cargo.lock', 'stratus-rs/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build eval binary
+        run: cargo build --release -p stratus-eval
+        working-directory: stratus-rs
+
+      - name: Run scenario suite (mock-only)
+        run: STRATUS_EVAL_MOCK_ONLY=1 cargo run --release -p stratus-eval
+        working-directory: stratus-rs
+
+  # --- Optional: dependency / security audit (informational) ---
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Audit dependencies
+        run: cargo audit
+        working-directory: stratus-rs
+        #continue-on-error: false # Don't block on first advisory; fix in follow-up

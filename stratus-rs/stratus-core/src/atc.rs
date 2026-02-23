@@ -187,7 +187,7 @@ Supported commands:
 
     /// Update the current flight state based on telemetry
     pub fn update_state(&mut self, telemetry: &Telemetry) {
-        let speed_kts = (telemetry.speed.ground_speed_mps * 1.94384) as f32;
+        let speed_kts = telemetry.speed.ground_speed_mps * 1.94384;
         let alt_agl_ft = (telemetry.position.altitude_agl_m * 3.28084) as f32;
         let on_ground = telemetry.state.on_ground;
 
@@ -247,7 +247,7 @@ Supported commands:
 
         if active_freq != expected_freq {
             // Monitored Frequencies check (GND and TWR)
-            let monitored_freqs = vec![KSFO_GND, KSFO_TWR];
+            let monitored_freqs = [KSFO_GND, KSFO_TWR];
             if monitored_freqs.contains(&active_freq) {
                 let redirect_msg = match expected_freq {
                     KSFO_GND => format!(

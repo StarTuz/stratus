@@ -99,13 +99,8 @@ Response with PASS if it meets the criteria, or FAIL if it does not.
         info!("  [JUDGE RAW]: {}", response);
 
         // Attempt to parse JSON from the response
-        let verdict = if response.to_uppercase().contains("\"VERDICT\": \"PASS\"")
-            || response.to_uppercase().contains("VERDICT: PASS")
-        {
-            true
-        } else {
-            false
-        };
+        let verdict = response.to_uppercase().contains("\"VERDICT\": \"PASS\"")
+            || response.to_uppercase().contains("VERDICT: PASS");
 
         let reason = if let Some(r) = response.split("\"reason\":").nth(1) {
             r.trim_matches(|c| {
@@ -122,17 +117,25 @@ Response with PASS if it meets the criteria, or FAIL if it does not.
     }
 }
 
+/// When set (e.g. in CI), skip llm_judge expectations and BIT-* scenarios so no Ollama/BitNet is required.
+fn mock_only_mode() -> bool {
+    std::env::var("STRATUS_EVAL_MOCK_ONLY").is_ok()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
+    let mock_only = mock_only_mode();
+    if mock_only {
+        info!("STRATUS_EVAL_MOCK_ONLY=1: skipping llm_judge and BIT-* scenarios");
+    }
     info!("Starting Stratus ATC Evaluation Suite");
 
     // Mock server for the ATC engine (deterministic logic test)
     let mock_server = MockServer::start().await;
     info!("ATC Mock Server running at {}", mock_server.uri());
 
-    // Real Ollama for the Judge (semantic evaluation)
-    // We assume Ollama is running on localhost:11434 for the judge
+    // Real Ollama for the Judge (semantic evaluation); only used when not in mock-only mode
     let judge = JudgeEngine::new("http://localhost:11434");
 
     let scenarios_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scenarios");
@@ -143,11 +146,24 @@ async fn main() -> Result<()> {
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
-            total += 1;
-            if run_scenario(&path, &mock_server, &judge).await? {
-                passed += 1;
+        if path.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        // In mock-only mode, skip BIT-* scenarios (require BitNet)
+        if mock_only {
+            let content = fs::read_to_string(&path)?;
+            let scenario: Scenario = serde_yaml::from_str(&content)?;
+            if scenario.meta.id.starts_with("BIT-") {
+                info!(
+                    "Skipping {} (BIT scenario in mock-only mode)",
+                    scenario.meta.id
+                );
+                continue;
             }
+        }
+        total += 1;
+        if run_scenario(&path, &mock_server, &judge, mock_only).await? {
+            passed += 1;
         }
     }
 
@@ -164,6 +180,7 @@ async fn run_scenario(
     path_to_scenario: &PathBuf,
     server: &MockServer,
     judge: &JudgeEngine,
+    mock_only: bool,
 ) -> Result<bool> {
     let content = fs::read_to_string(path_to_scenario)?;
     let scenario: Scenario = serde_yaml::from_str(&content)?;
@@ -207,8 +224,11 @@ async fn run_scenario(
         // 2. Prepare Telemetry
         let mut telemetry = Telemetry::default();
         telemetry.state.on_ground = step.telemetry.on_ground;
-        telemetry.speed.ground_speed_mps = (step.telemetry.ground_speed_kts / 1.94384) as f32;
+        telemetry.speed.ground_speed_mps = step.telemetry.ground_speed_kts / 1.94384_f32;
         telemetry.position.altitude_agl_m = (step.telemetry.alt_agl_ft / 3.28084) as f64;
+        // Advance engine state with this step's telemetry so COM1 can match expected frequency
+        engine.update_state(&telemetry);
+        telemetry.radios.com1_hz = engine.expected_frequency();
 
         // 3. Process Input (if any)
         if !step.input_voice.is_empty() {
@@ -251,35 +271,39 @@ async fn run_scenario(
                                 }
                             }
                             "llm_judge" => {
-                                info!("  Judging response...");
-                                match judge
-                                    .evaluate(
-                                        &state_debug,
-                                        &step.input_voice,
-                                        response.as_deref().unwrap_or(""),
-                                        &exp.value,
-                                    )
-                                    .await
-                                {
-                                    Ok((passed, reason)) => {
-                                        if passed {
-                                            info!(
-                                                "  PASS: Judge verdict: PASS. Reason: {}",
-                                                reason
-                                            );
-                                        } else {
-                                            error!(
-                                                "  FAIL: [{}] Judge verdict: FAIL. Reason: {}",
-                                                exp.severity, reason
-                                            );
-                                            scenario_ok = false;
+                                if mock_only {
+                                    info!("  SKIP: llm_judge (STRATUS_EVAL_MOCK_ONLY)");
+                                } else {
+                                    info!("  Judging response...");
+                                    match judge
+                                        .evaluate(
+                                            &state_debug,
+                                            &step.input_voice,
+                                            response.as_deref().unwrap_or(""),
+                                            &exp.value,
+                                        )
+                                        .await
+                                    {
+                                        Ok((passed, reason)) => {
+                                            if passed {
+                                                info!(
+                                                    "  PASS: Judge verdict: PASS. Reason: {}",
+                                                    reason
+                                                );
+                                            } else {
+                                                error!(
+                                                    "  FAIL: [{}] Judge verdict: FAIL. Reason: {}",
+                                                    exp.severity, reason
+                                                );
+                                                scenario_ok = false;
+                                            }
                                         }
-                                    }
-                                    Err(e) => {
-                                        warn!(
-                                            "  JUDGE ERROR: Failed to query judge model: {:?}",
-                                            e
-                                        );
+                                        Err(e) => {
+                                            warn!(
+                                                "  JUDGE ERROR: Failed to query judge model: {:?}",
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }

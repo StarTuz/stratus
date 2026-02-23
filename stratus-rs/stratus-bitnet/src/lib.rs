@@ -53,15 +53,16 @@ impl BitNetClient {
         if self.model_path.is_none() {
             // Efficiency first: If no model is loaded, return a mocked but structured response
             // This is useful for testing without 5GB VRAM penalty.
-            return Ok(format!(
+            return Ok(
                 "Skyhawk 172SP, San Francisco Tower, [MOCK_BITNET] Roger, continue as requested."
-            ));
+                    .to_string(),
+            );
         }
 
         if let Some(_model) = &self.model {
-            return Ok(format!("ATC: [BitNet Real Inference Placeholder]"));
+            return Ok("ATC: [BitNet Real Inference Placeholder]".to_string());
         }
 
-        Ok(format!("ATC: [BitNet Model Not Loaded]"))
+        Ok("ATC: [BitNet Model Not Loaded]".to_string())
     }
 }

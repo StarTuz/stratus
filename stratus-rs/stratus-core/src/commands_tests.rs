@@ -5,7 +5,7 @@ use std::fs;
 use tempfile::tempdir;
 
 #[cfg(test)]
-mod commands_tests {
+mod tests {
     use super::*;
 
     #[test]

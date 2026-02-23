@@ -53,7 +53,8 @@ pub enum OllamaStatus {
     Disconnected,
 }
 
-/// Messages that can be sent to the application
+/// Messages that can be sent to the application (Elm-style; variant names often include "Message").
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone)]
 pub enum Message {
     // UI Events

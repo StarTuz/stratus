@@ -66,6 +66,16 @@ cd stratus-rs
 cargo run --bin stratus-gui
 ```
 
+## Development & quality
+
+We run a **full CI pipeline** on every push and PR: format check, Clippy, unit tests, and scenario regression (mock-only). See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the local checklist and **[docs/QUALITY_AND_CI.md](docs/QUALITY_AND_CI.md)** for pipeline details.
+
+```bash
+cd stratus-rs
+cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test
+STRATUS_EVAL_MOCK_ONLY=1 cargo run --release -p stratus-eval   # scenario regression
+```
+
 ## Legacy
 
 The old Python prototype has been archived to `.legacy_client/` and is no longer used.

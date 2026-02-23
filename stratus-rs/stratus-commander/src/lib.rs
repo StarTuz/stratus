@@ -145,16 +145,23 @@ impl CommandParser {
     }
 }
 
+/// C FFI: process commands file.
+///
+/// # Safety
+/// Caller must pass valid, non-null pointers to NUL-terminated C strings that outlive the call.
 #[no_mangle]
-pub extern "C" fn process_stratus_commands(command_path: *const i8, status_path: *const i8) -> i32 {
+pub unsafe extern "C" fn process_stratus_commands(
+    command_path: *const i8,
+    status_path: *const i8,
+) -> i32 {
     use std::ffi::CStr;
 
     if command_path.is_null() || status_path.is_null() {
         return -1;
     }
 
-    let c_cmd_path = unsafe { CStr::from_ptr(command_path) };
-    let c_stat_path = unsafe { CStr::from_ptr(status_path) };
+    let c_cmd_path = CStr::from_ptr(command_path);
+    let c_stat_path = CStr::from_ptr(status_path);
 
     let cmd_path = PathBuf::from(c_cmd_path.to_string_lossy().into_owned());
     let stat_path = PathBuf::from(c_stat_path.to_string_lossy().into_owned());

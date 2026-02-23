@@ -1,0 +1,51 @@
+# Qodo Merge (PR Agent) — AI-powered PR review, description, and commands
+# See https://github.com/qodo-ai/pr-agent | Config: .pr-agent.toml
+
+name: Qodo Merge (PR Agent)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, reopened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  pr_agent_job:
+    if: >
+      github.event.sender.type != 'Bot' &&
+      (
+        github.event_name == 'push' ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null &&
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            startsWith(github.event.comment.body, '/review') ||
+            startsWith(github.event.comment.body, '/describe') ||
+            startsWith(github.event.comment.body, '/improve') ||
+            startsWith(github.event.comment.body, '/ask') ||
+            startsWith(github.event.comment.body, '/summarize')
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    name: Run PR Agent
+    env:
+      OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: PR Agent action
+        uses: qodo-ai/pr-agent@main

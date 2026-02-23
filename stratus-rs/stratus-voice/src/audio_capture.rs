@@ -1,3 +1,6 @@
+// AudioPipeline is used from a single thread; Vad/cpal types are not Send/Sync.
+#![allow(clippy::arc_with_non_send_sync)]
+
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use log::{info, warn};
