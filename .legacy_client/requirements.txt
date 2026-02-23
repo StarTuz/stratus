@@ -1,0 +1,19 @@
+PySide6
+requests
+
+# Web interface (ComLink) - allows tablet/phone/second monitor access
+flask
+flask-socketio
+python-socketio
+python-engineio
+
+# Audio playback uses external player, no Python audio libraries needed:
+# - Linux: mpv (pacman -S mpv / apt install mpv)
+# - macOS: afplay (built-in)
+
+# Optional: for downloading files
+# Note: requests is already included above
+
+# SpeechD-NG integration
+dbus-python
+jeepney  # Alternative pure-python DBus client (backup)
